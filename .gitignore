@@ -1,4 +1,36 @@
-.DS_Store
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Package manager artifacts
+package-lock.json
+yarn.lock
+
+# TypeScript
+*.tsbuildinfo
+
+# Python (removed in the TypeScript migration)
 .venv/
 __pycache__/
 *.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

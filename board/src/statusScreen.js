@@ -42,5 +42,5 @@ export function failureLines({ kind, status, retryInSeconds }) {
  * misrepresent a dead server as a working board.
  */
 export function reconnectingLines() {
-  return ['', 'LOST CONNECTION', 'RECONNECTING...', '', '']
+  return ['', 'LOST CONNECTION', '', 'RECONNECTING...', '']
 }

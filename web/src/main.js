@@ -9,8 +9,7 @@ import { SoundEngine } from './SoundEngine.js'
 import { MessageRotator } from './MessageRotator.js'
 import { KeyboardController } from './KeyboardController.js'
 import { RemoteMessageSync } from './RemoteMessageSync.js'
-import { DEFAULT_DISPLAY_CONFIG, CONFIG_LOADED, MESSAGES } from './constants.js'
-import { isDynamicMarker, initDynamicProviders, startWeatherRefresh } from './DynamicMessages.js'
+import { BOARD_CONFIG, BOARD_SLUG } from './constants.js'
 
 // Module scripts are deferred — DOM is already parsed when this runs.
 // Do NOT use DOMContentLoaded: top-level await in constants.js can cause
@@ -21,47 +20,21 @@ async function bootstrap() {
   const boardContainer = document.getElementById('board-container')
   if (!boardContainer) return
 
+  // constants.js has already blocked on /api/config, so reaching this line
+  // means the backend answered. Clear the shell's connecting message.
+  document.getElementById('boot-status')?.remove()
+
   const soundEngine = new SoundEngine()
+  const displayConfig = BOARD_CONFIG
+  let layoutSignature = serializeLayout(displayConfig)
 
-  // PR #2: Try fetching remote config first, fall back to local defaults
-  const remoteSync = new RemoteMessageSync(handleRealtimeEvent, resolveBoardSlugFromPath())
-  const displayConfig = (await remoteSync.fetchConfig()) || cloneConfig(DEFAULT_DISPLAY_CONFIG)
-  const configSignature = serializeConfig(displayConfig)
-  const backendAvailable = remoteSync._backendAvailable === true
-
-  // Show admin button only when backend is running
-  const adminBtn = document.getElementById('admin-btn')
-  if (adminBtn && backendAvailable) {
-    adminBtn.style.display = ''
-  }
-
-  // Show config source indicator
-  const configIndicator = document.getElementById('config-indicator')
-  if (configIndicator) {
-    if (!CONFIG_LOADED) {
-      configIndicator.classList.add('offline')
-      configIndicator.title = 'config.json not found — using built-in defaults'
-    } else {
-      configIndicator.classList.add('online')
-      configIndicator.title = 'Loaded from config.json'
-    }
-  }
-
-  // Inject one of each dynamic marker type (datetime, weather) from config.json.
-  // The backend strips these, so we re-add them. Deduplicate to one per type.
-  const seen = new Set()
-  const dynamicMarkers = MESSAGES.filter((m) => {
-    if (!isDynamicMarker(m) || seen.has(m.dynamic)) return false
-    seen.add(m.dynamic)
-    return true
-  })
-  const staticMessages = displayConfig.defaultMessages
-  const allMessages = [...staticMessages, ...dynamicMarkers]
+  const remoteSync = new RemoteMessageSync(handleRealtimeEvent, BOARD_SLUG, handleConnectionStatus)
+  remoteSync.setActiveBoardSlug(displayConfig.boardSlug)
 
   let remoteOverrideActive = false
   const board = new Board(boardContainer, soundEngine, displayConfig)
   const rotator = new MessageRotator(board, {
-    messages: allMessages,
+    messages: displayConfig.defaultMessages,
     messageDurationSeconds: displayConfig.messageDurationSeconds,
   })
   const keyboard = new KeyboardController(rotator, soundEngine, board)
@@ -99,27 +72,6 @@ async function bootstrap() {
     volumeBtn.addEventListener('click', () => {
       resumeAudio()
       soundEngine.toggleMute()
-    })
-  }
-
-  // PR #10: Control panel via BroadcastChannel
-  if (typeof BroadcastChannel !== 'undefined') {
-    const { ControlChannel } = await import('./ControlChannel.js')
-    const ch = new ControlChannel()
-    ch.on('ping', () => ch.send('pong'))
-    ch.on('message', ({ lines }) => {
-      rotator.stop()
-      board.displayMessage(lines, { interrupt: true })
-    })
-    ch.on('stop-rotation', () => rotator.stop())
-    ch.on('start-rotation', () => {
-      rotator.disableRemoteOverride({ showNextMessage: true, interrupt: true })
-    })
-    ch.on('set-messages', ({ messages }) => {
-      rotator.stop()
-      rotator.setMessages(messages)
-      rotator.currentIndex = -1
-      rotator.start()
     })
   }
 
@@ -182,10 +134,6 @@ async function bootstrap() {
     }, 1000)
   }
 
-  // Initialize dynamic message providers (weather fetch, etc.) before starting
-  await initDynamicProviders(allMessages)
-  startWeatherRefresh()
-
   // PR #2: Remote message sync
   const initialMessageState = await remoteSync.fetchMessageState()
   if (initialMessageState?.hasOverride) {
@@ -195,6 +143,14 @@ async function bootstrap() {
   }
 
   remoteSync.connect()
+
+  function handleConnectionStatus(status) {
+    const indicator = document.getElementById('config-indicator')
+    if (!indicator) return
+    indicator.classList.toggle('online', status === 'online')
+    indicator.classList.toggle('offline', status !== 'online')
+    indicator.title = status === 'online' ? 'Connected to server' : 'Reconnecting to server…'
+  }
 
   function handleRealtimeEvent(event) {
     if (!event || !event.type || !event.payload) return
@@ -209,9 +165,30 @@ async function bootstrap() {
     }
   }
 
+  /**
+   * Content changes are applied in place; only a change the running board
+   * cannot absorb — a different grid, charset, palette or animation timing —
+   * warrants a reload. Reloading on any change at all would restart every
+   * viewer each time a plugin screen refreshed, which for the clock is twice a
+   * minute.
+   */
   function handleConfigState(nextConfig) {
-    if (serializeConfig(nextConfig) !== configSignature) {
+    if (!nextConfig) return
+
+    const nextLayout = serializeLayout(nextConfig)
+    if (nextLayout !== layoutSignature) {
+      layoutSignature = nextLayout
       window.location.reload()
+      return
+    }
+
+    if (Array.isArray(nextConfig.defaultMessages)) {
+      // Deliberately not rotator.start(): that reshuffles and jumps to a new
+      // screen, which would be visible every time the clock ticks.
+      rotator.setMessages(nextConfig.defaultMessages)
+    }
+    if (Number.isFinite(nextConfig.messageDurationSeconds)) {
+      rotator.setMessageDurationSeconds(nextConfig.messageDurationSeconds)
     }
   }
 
@@ -237,30 +214,14 @@ async function bootstrap() {
   }
 }
 
-function cloneConfig(config) {
-  return {
-    cols: config.cols,
-    rows: config.rows,
-    messageDurationSeconds: config.messageDurationSeconds,
-    apiMessageDurationSeconds: config.apiMessageDurationSeconds,
-    defaultMessages: config.defaultMessages.map((m) => (m !== null && typeof m === 'object' && !Array.isArray(m) ? m : [...m])),
-  }
-}
-
-function serializeConfig(config) {
+/** Everything a running board cannot change without being rebuilt. */
+function serializeLayout(config) {
   return JSON.stringify({
     boardSlug: config.boardSlug,
     cols: config.cols,
     rows: config.rows,
-    messageDurationSeconds: config.messageDurationSeconds,
-    apiMessageDurationSeconds: config.apiMessageDurationSeconds,
-    defaultMessages: config.defaultMessages,
+    charset: config.charset,
+    accentColors: config.accentColors,
+    timing: config.timing,
   })
-}
-
-function resolveBoardSlugFromPath() {
-  const path = window.location.pathname.replace(/\/+$/, '') || '/'
-  if (path === '/' || path === '/index.html') return null
-  const [, candidate] = path.split('/')
-  return candidate || null
 }

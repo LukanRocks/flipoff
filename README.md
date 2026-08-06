@@ -13,83 +13,26 @@ No accounts. No subscriptions. No $199 fee. Build it once and go.
 ## Features
 
 - Realistic split-flap animation with mechanical character-stepping (top/bottom flap halves)
-- **Dynamic messages**: live date/time (🕐 with yellow airport-board styling) and weather (🌡️ with temperature-based color gradient blue→cyan→green→yellow→orange→red)
-- Weather shows city, country flag + full name, temperature, and condition — auto-detected from IP, refreshed every 10 minutes
 - Multiple sound modes: Authentic (default), Soft, Joke (rubber duck + fart), Mute — with stereo panning per tile
-- Auto-rotating messages with shuffle — date/time always first, weather second, then random rotation
+- Auto-rotating screens with shuffle and random mode
+- Admin dashboard for board geometry, screens, plugins and message overrides — reachable from any device on the network
+- Plugin screens: clock, current weather, 3-day forecast, GitHub stats, Quote of the Day, crypto prices
+- Real-time WebSocket push — message and rotation changes appear on every connected display instantly
+- Connection indicator, and automatic reconnection: a display survives a server restart without anyone touching it
+- Multi-board support — run multiple independent displays from one server
 - Display modes: Color, Matrix, Grayscale accent palettes
 - Countdown progress bar showing time until next message (hidden in fullscreen)
-- Config source indicator (green dot = config.json loaded, orange = using built-in defaults)
-- Control panel for custom messages, clock, countdown, and message queue (same-browser, no server needed)
-- Optional Node backend with admin dashboard, plugin system, and real-time WebSocket sync
-- Built-in plugins: Weather forecast, GitHub stats, Quote of the Day, Crypto prices
-- Multi-board support — run multiple independent displays from one server
 - Fullscreen TV mode with automatic tile resizing
 - Keyboard controls for manual navigation
 - Emoji support in messages (animate through random charset characters before landing)
 - Responsive from mobile to 4K displays
 - Vanilla HTML/CSS/JS frontend — no UI framework, just Vite for bundling
 
-## Deployment Options
+## Running It
 
-FlipOff can run in three ways. Choose the one that fits your needs:
-
-|                                    | GitHub Pages             | Static Server            | Docker / Backend             |
-| ---------------------------------- | ------------------------ | ------------------------ | ---------------------------- |
-| **Setup**                          | Fork + enable Pages      | Build + serve `web/dist` | `docker compose up --build`  |
-| **Display + animations**           | Yes                      | Yes                      | Yes                          |
-| **Sound modes**                    | Yes                      | Yes                      | Yes                          |
-| **Dynamic date/time + weather**    | Yes                      | Yes                      | Yes                          |
-| **Keyboard shortcuts**             | Yes                      | Yes                      | Yes                          |
-| **Control panel (same-browser)**   | Yes                      | Yes                      | Yes                          |
-| **Emoji + colored rows**           | Yes                      | Yes                      | Yes                          |
-| **config.json customization**      | Yes (edit before deploy) | Yes                      | Yes (live reload on restart) |
-| **Admin dashboard**                | No                       | No                       | Yes                          |
-| **Server-side plugins**            | No                       | No                       | Yes                          |
-| **REST API / WebSocket**           | No                       | No                       | Yes                          |
-| **Multi-board support**            | No                       | No                       | Yes                          |
-| **Remote control (other devices)** | No                       | No                       | Yes                          |
-
-### Option 1: GitHub Pages (easiest, free hosting)
-
-Deploy the built bundle to GitHub Pages for a zero-maintenance public display. Build it with:
-
-```bash
-pnpm install && pnpm -C web build
-```
-
-then publish `web/dist` — via a Pages workflow, or by pushing that directory to a `gh-pages`
-branch. The bundle uses relative asset URLs, so it works at a domain root and under a
-`https://<your-username>.github.io/flipoff/` sub-path alike.
-
-To customize messages, edit `web/public/config.json` and rebuild — or edit
-`web/dist/config.json` in the deployed output directly, since it is fetched at runtime
-rather than baked into the bundle.
-
-Everything runs in the browser. No server needed. Dynamic date/time and weather work because they use client-side APIs (the browser's clock and free public APIs for geolocation + weather).
-
-### Option 2: Static file server (local network)
-
-Run on a local machine or Raspberry Pi to display on a TV:
-
-```bash
-git clone https://github.com/<your-username>/flipoff.git
-cd flipoff
-pnpm install
-pnpm -C web build
-npx serve web/dist
-```
-
-Same features as GitHub Pages, but you can edit `web/dist/config.json` and refresh the browser to see changes immediately. Good for a home display or office TV.
-
-Any static file server works — nginx, Apache, `npx serve`, etc.
-
-For live-reloading development, `pnpm -C web dev` runs the Vite dev server on
-http://localhost:5173 instead.
-
-### Option 3: Docker / backend (full features)
-
-Run the full backend for admin dashboard, plugins, multi-board, and remote control:
+The display is a client of the backend — it reads its grid, charset, colours, timing and
+its entire rotation from the server's `/api/config`. `web/dist` is **not** deployable on
+its own; there is no static/no-server mode.
 
 ```bash
 git clone https://github.com/<your-username>/flipoff.git
@@ -105,51 +48,48 @@ pnpm -C backend start
 ```
 
 The backend serves `web/dist`, so the frontend has to be built before it will show
-anything. For development, `pnpm dev` runs the Vite dev server on
-http://localhost:5173 and the backend on 8080 together, with `/api` and `/ws` proxied.
+anything. For development, `pnpm dev` runs Vite on http://localhost:5173 and the backend
+on 8080 together, with `/api` and `/ws` proxied — run both, since `pnpm -C web dev` alone
+has no server to read its config from.
 
 | URL                                  | What                                               |
 | ------------------------------------ | -------------------------------------------------- |
 | `http://localhost:8080`              | Display                                            |
-| `http://localhost:8080/control.html` | Control panel (same-browser tab-to-tab)            |
 | `http://localhost:8080/admin`        | Admin dashboard (network-wide, password-protected) |
 | `http://localhost:8080/display.html` | Standalone fullscreen display (no header/hero)     |
+| `http://localhost:8080/<board-slug>` | A secondary board                                  |
 
-The admin password is auto-generated on first run and printed to the console. Set it explicitly with the `ADMIN_PASSWORD` environment variable.
+The admin password is auto-generated on first run and printed to the console. Set it
+explicitly with the `ADMIN_PASSWORD` environment variable.
 
-Board config and screens persist in a Docker volume (`flipoff-data`). Message changes in `web/public/config.json` are picked up automatically on rebuild — no need to reset the volume.
+Board config and screens persist in a Docker volume (`flipoff-data`). Message changes in
+`backend/config.json` are picked up on restart for boards nobody has customised in the
+admin dashboard — no need to reset the volume.
 
-## Dynamic Messages
+## Screens and Plugins
 
-Add dynamic messages to `web/public/config.json` alongside regular quotes:
+A board's rotation is a list of **screens**, managed in the admin dashboard. Two kinds:
 
-```json
-{
-  "messages": [{ "dynamic": "datetime" }, { "dynamic": "weather" }, ["", "🏛️ GOD IS IN", "THE DETAILS .", "(LUDWIG MIES)", ""]]
-}
-```
+- **Manual** — fixed lines you type in. A fresh install seeds these from the `messages`
+  array in `backend/config.json`.
+- **Plugin** — lines regenerated on a refresh interval.
 
-| Type       | What it shows                                          | Color                                            |
-| ---------- | ------------------------------------------------------ | ------------------------------------------------ |
-| `datetime` | 🕐 Time, day of week, 📅 date, timezone (e.g. `GMT+1`) | Airport-board yellow                             |
-| `weather`  | City, 🇵🇹 country flag + name, temperature, condition   | Temperature gradient (blue at -10C → red at 40C) |
+| Plugin                     | Shows                                      | Needs                |
+| -------------------------- | ------------------------------------------ | -------------------- |
+| Date & Time                | Time, weekday, date, UTC offset            | A time zone          |
+| Open-Meteo Current Weather | City, country flag, temperature, condition | A city + country     |
+| Open-Meteo 3 Day Forecast  | Weekday, min/max temperature, condition    | A city + country     |
+| GitHub Repo Stats          | Stars, forks, watchers                     | A repo               |
+| GitHub Open Work           | Open issues and pull requests               | A repo               |
+| Quote of the Day           | A daily quote                              | `API_NINJAS_API_KEY` |
+| Random Quote               | A random quote                             | `API_NINJAS_API_KEY` |
+| Crypto Prices              | Current prices for chosen pairs            | `API_NINJAS_API_KEY` |
 
-- **Date/time** always shows first, **weather** second, then all messages rotate randomly
-- Weather is auto-detected from IP geolocation (no API key needed) using Open-Meteo
-- Weather data refreshes every 10 minutes in the background
-- Both dynamic messages work on all deployment options (GitHub Pages, static server, Docker)
+A new install seeds a **clock** screen alongside the quotes. Weather is opt-in because it
+needs a location: screens render on the server, so there is no per-viewer geolocation or
+time zone — both are explicit settings.
 
-## Control Panel vs Admin Dashboard
-
-|                      | Control Panel                                   | Admin Dashboard                                            |
-| -------------------- | ----------------------------------------------- | ---------------------------------------------------------- |
-| **How it works**     | BroadcastChannel (tab-to-tab)                   | REST API + WebSocket                                       |
-| **Requires backend** | No                                              | Yes (`pnpm -C backend start`)                              |
-| **Reach**            | Same browser only                               | Any device on the network                                  |
-| **Auth**             | None                                            | Password                                                   |
-| **Features**         | Custom message, clock, countdown, message queue | Board config, screen management, plugins, message override |
-
-Both are accessible from the display page header. The Admin button only appears when the backend is detected.
+Writing your own plugin is one file plus one line in the registry — see [PLUGINS.md](PLUGINS.md).
 
 ## Keyboard Shortcuts
 
@@ -170,7 +110,11 @@ Each tile on the board is an independent split-flap element with top/bottom halv
 
 Sound is generated per-tile using extracted tick slices from a recorded split-flap audio clip, with stereo panning based on tile position. A master audio chain applies lowpass filtering, EQ, and compression across four sound profiles. Authentic mode is the default.
 
-Dynamic messages (date/time, weather) support per-row coloring — airport-board yellow for date/time, and a temperature-based gradient (blue→cyan→green→yellow→orange→red) for weather. Colors are applied after the flip animation completes and cleared when a regular message displays.
+The browser holds no configuration of its own. `constants.js` blocks on `/api/config` at
+startup and retries until the server answers, so a display started before the backend
+simply waits and then comes up. After that, the server pushes `message_state` and
+`config_state` frames over `/ws`; content changes swap the rotation in place, and only a
+layout change — grid, charset, palette, animation timing — reloads the page.
 
 ## File Structure
 
@@ -185,26 +129,20 @@ flipoff/
   web/
     index.html            — Main display page
     display.html          — Standalone fullscreen display (no chrome)
-    control.html          — Browser-based control panel
-    admin.html            — Admin dashboard (needs the backend)
-    vite.config.ts        — Build config: 4 entry pages, dev proxy to the backend
+    admin.html            — Admin dashboard
+    vite.config.ts        — Build config: 3 entry pages, dev proxy to the backend
     public/
-      config.json         — Configuration (grid, timing, messages, colors)
       images/             — Screenshot and other static images
     src/
       main.js             — Entry point, audio init, fullscreen, remote sync
-      Board.js            — Tile grid, display modes, row colors, transitions
+      Board.js            — Tile grid, display modes, transitions
       Tile.js             — Split-flap flip with character stepping and emoji support
       SoundEngine.js      — Sound profiles, tick extraction, stereo panning
-      MessageRotator.js   — Shuffle, pinned start order, random mode, remote override
+      MessageRotator.js   — Shuffle, random mode, remote override
       KeyboardController.js — Keyboard shortcuts (F, M, R, C, arrows, etc.)
-      DynamicMessages.js  — Date/time and weather providers with colored output
-      ControlChannel.js   — BroadcastChannel wrapper for control panel
-      boardFormatter.js   — Text wrapping and centering for the board grid
-      RemoteMessageSync.js — REST + WebSocket sync with the backend
-      control.js          — Control panel logic (custom, clock, countdown, queue)
+      RemoteMessageSync.js — WebSocket sync and reconnection
       admin.js            — Admin dashboard UI
-      constants.js        — Config loader (reads config.json, exports defaults)
+      constants.js        — Fetches /api/config and exports it as module constants
       flapAudio.js        — Embedded base64 audio clip
       audio/              — Joke mode: rubber duck squeak, fart finisher
       css/
@@ -213,9 +151,9 @@ flipoff/
         board.css         — Board container, accent bars, shortcuts overlay
         tile.css          — Split-flap tile halves and flip animations
         responsive.css    — Media queries (mobile through 4K)
-        control.css       — Control panel dark theme
         admin.css         — Admin dashboard styles
   backend/
+    config.json           — Grid, timing, charset, colors, seed messages
     src/
       main.ts             — Entry point, http server, WebSocket upgrade
       app.ts              — Express app: middleware, routes, static serving
@@ -230,32 +168,45 @@ flipoff/
         base.ts           — Plugin types, manifests, schema validation
         index.ts          — Plugin registry (add new plugins here)
         runtime.ts        — Refresh loops and error handling
-        weather/          — Open-Meteo 3-day forecast
+        datetime/         — Clock
+        weather/          — Open-Meteo current conditions and 3-day forecast
         github/           — Repo stats, open issues/PRs
         api-ninjas/       — Quote of the Day, random quotes, crypto prices
 ```
 
 ## Customization
 
-Edit `web/public/config.json` to change:
+Most of what you'll want to change lives in the **admin dashboard**: board size, message
+duration, and the screens themselves. Those persist to `~/.flipoff` and take effect
+immediately.
 
-- **Messages**: Static quotes (5-line arrays) and dynamic markers (`{"dynamic": "datetime"}`, `{"dynamic": "weather"}`)
+The rest is in `backend/config.json`, read once at server startup and served to the
+display through `/api/config`:
+
+- **Messages**: the 5-line arrays a brand-new board is seeded with
 - **Grid size**: `grid.cols` and `grid.rows`
 - **Timing**: `timing.flipStepDuration`, `timing.staggerDelay`, `timing.messageInterval`, etc.
 - **Colors**: `accentColors` array
-- **Character set**: `charset` string (includes A-Z, 0-9, punctuation, parentheses)
+- **Character set**: `charset` string (A-Z, 0-9, punctuation, parentheses). This drives the
+  flip animation rather than filtering text — characters outside it, emoji included, still
+  render.
 
-Message changes in `web/public/config.json` take effect on rebuild/restart — no need to reset Docker volumes or clear state.
+Message changes take effect on restart for any board whose screens you haven't edited in
+the admin dashboard — no need to reset Docker volumes or clear state. Once you customise a
+board's screens, they win and `config.json` stops overriding them.
 
-When running with the backend, board config can also be changed at runtime through the admin dashboard.
+Set `FLIPOFF_CONFIG_PATH` to read that file from somewhere else, so a container can
+bind-mount its own without rebuilding the image.
 
 ## Environment Variables (backend)
 
-| Variable             | Default        | Description                                |
-| -------------------- | -------------- | ------------------------------------------ |
-| `PORT`               | `8080`         | Server listen port                         |
-| `ADMIN_PASSWORD`     | Auto-generated | Admin dashboard password                   |
-| `API_NINJAS_API_KEY` | —              | API key for quote and crypto price plugins |
+| Variable              | Default               | Description                                |
+| --------------------- | --------------------- | ------------------------------------------ |
+| `PORT`                | `8080`                | Server listen port                         |
+| `ADMIN_PASSWORD`      | Auto-generated        | Admin dashboard password                   |
+| `API_NINJAS_API_KEY`  | —                     | API key for quote and crypto price plugins |
+| `FLIPOFF_CONFIG_PATH` | `backend/config.json` | Grid, timing, charset, colors and seed messages |
+| `FLIPOFF_DATA_DIR`    | `~/.flipoff`          | Where board settings and screens persist   |
 
 ## License
 

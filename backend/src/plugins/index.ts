@@ -2,8 +2,10 @@ import type { PluginRegistry, ScreenPlugin } from './base'
 import { cryptoPricesPlugin } from './api-ninjas/crypto-prices'
 import { quoteOfTheDayPlugin } from './api-ninjas/quote-of-the-day'
 import { randomQuotePlugin } from './api-ninjas/random-quote'
+import { datetimePlugin } from './datetime/clock'
 import { githubOpenWorkPlugin } from './github/open-work'
 import { githubRepoStatsPlugin } from './github/repo-stats'
+import { openMeteoCurrentPlugin } from './weather/open-meteo-current'
 import { openMeteoForecastPlugin } from './weather/open-meteo-forecast'
 
 /**
@@ -13,10 +15,18 @@ import { openMeteoForecastPlugin } from './weather/open-meteo-forecast'
  *
  * Adding a plugin: write the module, then add one import and one entry here.
  *
- * Sorted by plugin id, which is the order the admin dashboard renders and the
- * order the golden API responses were captured in.
+ * Sorted by plugin id, which is the order the admin dashboard renders them in.
  */
-const PLUGIN_LIST: ScreenPlugin[] = [cryptoPricesPlugin, quoteOfTheDayPlugin, randomQuotePlugin, githubOpenWorkPlugin, githubRepoStatsPlugin, openMeteoForecastPlugin]
+const PLUGIN_LIST: ScreenPlugin[] = [
+  cryptoPricesPlugin,
+  quoteOfTheDayPlugin,
+  randomQuotePlugin,
+  datetimePlugin,
+  githubOpenWorkPlugin,
+  githubRepoStatsPlugin,
+  openMeteoCurrentPlugin,
+  openMeteoForecastPlugin,
+]
 
 export function loadPlugins(): PluginRegistry {
   const registry: PluginRegistry = new Map()

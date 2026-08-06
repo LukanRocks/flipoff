@@ -19,30 +19,57 @@ The backend serves `web/dist` (or `backend/public` in a container), not raw sour
 TypeScript 6 no longer loads `@types/*` into global scope automatically. `backend/tsconfig.json`
 names them in `types: ["node"]`; dropping that breaks every `process` and `__dirname`.
 
-## The two runtime modes — read this before touching config or fetch code
+## The frontend requires the backend — there is no static mode
 
-FlipOff runs **with or without a backend**, and both paths must keep working.
+`web/dist` is not deployable on its own. The display gets **everything** from the server:
+grid, charset, accent colours, animation timing and the whole rotation all arrive in one
+`/api/config` response, and live updates come over `/ws`.
 
-1. **Static** — `web/dist` served by anything (GitHub Pages, `npx serve`, nginx). No
-   server. `RemoteMessageSync` probes `/api/config`, gets nothing, sets
-   `_backendAvailable = false`, and the app runs entirely on `config.json` + client-side
-   APIs. The Admin button stays hidden.
-2. **Backend** — the server serves the built bundle and adds the admin dashboard,
-   plugins, multi-board, REST API, and WebSocket push.
+There is deliberately no local fallback. `web/src/constants.js` blocks the module graph on
+`/api/config` and retries with backoff until the server answers; the HTML shells show a
+static "Connecting to server…" message that `main.js` removes once the board mounts. If
+you find yourself adding a "when the backend is missing" branch, that is the thing this
+architecture removed — a board rendering built-in defaults hides an outage instead of
+showing it.
 
-Anything server-only is progressive enhancement. Never make the display depend on a
-backend response.
+The corollary is that `pnpm -C web dev` alone renders nothing. Run `pnpm dev` from the
+root so the backend comes up alongside Vite.
 
-## config.json is shared, and it is fetched at runtime
+## config.json is backend-only
 
-`web/public/config.json` holds grid size, animation timing, charset, accent colours, and
-the message rotation. It is read **twice, independently**:
+`backend/config.json` holds grid size, animation timing, charset, accent colours and the
+seed messages. **Only the server reads it**, once at startup; it reaches the browser
+through `/api/config`. `FLIPOFF_CONFIG_PATH` overrides the location so a container can
+bind-mount a different one without a rebuild.
 
-- the browser fetches it at startup (`web/src/constants.js`, top-level `await`)
-- the backend reads the same file for its defaults
+`serializeConfig()` in `board/config.ts` is the single place that assembles that payload,
+and it also feeds every `config_state` WebSocket frame. Adding a field there means adding
+it to `main.js`'s `serializeLayout()` too if a running board cannot absorb the change
+without being rebuilt.
 
-It lives in `public/` and not `src/` on purpose: it must land at the bundle root as plain
-JSON so a user can edit it in a deployed build without rebuilding. Do not `import` it.
+## config_state must not reload the page
+
+Plugin screens push a new `config_state` every time their output changes — for the clock,
+twice a minute. `handleConfigState` in `main.js` therefore splits the payload: content
+(`defaultMessages`, durations) is applied in place via `rotator.setMessages()`, and only a
+layout change (grid, charset, palette, timing) reloads. The in-place path must never call
+`rotator.start()` or reset `currentIndex`, or every clock tick visibly jumps the rotation
+to a different screen.
+
+## Time and weather are plugins, not client-side features
+
+The browser used to render a clock and current weather itself from `{"dynamic": ...}`
+markers in config.json, calling ipapi.co and open-meteo directly. Both are backend plugins
+now (`datetime`, `open_meteo_current`). Server-side there is no per-viewer timezone or
+geolocation, so both take explicit settings.
+
+Plugin screens render plain `string[]`. There is no colour channel anywhere in the
+pipeline — `PluginRefreshResult` → `resolveScreenLines` → `defaultMessages` → `Board` —
+so re-adding one means widening all of them together.
+
+A plugin whose output is derived rather than fetched sets `volatile: true` in its
+manifest, and the refresh loop skips its `saveScreens` write. Without it the clock rewrites
+`~/.flipoff/screens.json` roughly 2,900 times a day.
 
 ## State lives in JSON files, and the format is load-bearing
 
@@ -63,8 +90,10 @@ lines. Two things bite here:
   3 in JS but the board renders it as one tile. Use `[...line].length` and
   `[...line].slice(0, cols).join('')`, never `.length` / `.slice()` directly, anywhere a
   line is measured or clipped.
-- Characters outside `charset` fall back to a space in the client formatter
-  (`boardFormatter.js`); emoji are handled separately by `Tile.js`.
+- `charset` is an **animation** concern, not a filter. Nothing rejects characters outside
+  it: `Tile._buildVisiblePath` flips through a few random charset characters and lands on
+  whatever it was given, which is how emoji render at all. `Board._formatToGrid` segments
+  lines with `Intl.Segmenter` so a multi-code-point emoji occupies one tile.
 
 ## API and WebSocket contracts are frozen
 
@@ -78,4 +107,5 @@ a user's screen — treat them as a stable identifier.
 
 ## Ports
 
-`web` dev server 5173 (proxies `/api`, `/ws`, `/admin` to the backend), backend 8080.
+`web` dev server 5173 (proxies `/api` and `/ws` to the backend), backend 8080. The dev
+server is useless without the backend — see above.

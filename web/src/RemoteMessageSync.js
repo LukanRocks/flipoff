@@ -1,36 +1,36 @@
+const RETRY_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000, 30000]
+
+/**
+ * The board's live link to the backend: the current override over /api/message,
+ * and pushed message/config updates over /ws.
+ *
+ * It never gives up. A board hanging on a wall has to survive a server restart
+ * without anyone refreshing it, so a closed socket always schedules another
+ * attempt and the caller is told about the state change instead.
+ */
 export class RemoteMessageSync {
-  constructor(onEvent, boardSlug = null) {
+  constructor(onEvent, boardSlug = null, onStatusChange = null) {
     this.onEvent = onEvent
+    this.onStatusChange = onStatusChange
     this.routeBoardSlug = boardSlug
     this.activeBoardSlug = boardSlug
     this.ws = null
     this.reconnectTimer = null
     this.isStopped = false
-    this._backendAvailable = null // null = unknown, true/false after first probe
-    this._wsFailCount = 0
+    this.status = 'connecting'
+    this._attempts = 0
   }
 
-  async fetchConfig() {
-    const config = await this._fetchJson(this._buildApiPath('/api/config', this.routeBoardSlug))
-    if (config === null) {
-      this._backendAvailable = false
-      return null
-    }
-    this._backendAvailable = true
-    if (config.boardSlug) {
-      this.activeBoardSlug = config.boardSlug
-    }
-    return config
+  setActiveBoardSlug(boardSlug) {
+    if (boardSlug) this.activeBoardSlug = boardSlug
   }
 
   fetchMessageState() {
-    if (this._backendAvailable === false) return Promise.resolve(null)
     return this._fetchJson(this._buildApiPath('/api/message', this.activeBoardSlug || this.routeBoardSlug))
   }
 
   connect() {
-    if (this._backendAvailable === false) return
-    if (!this._canUseNetwork() || this.isStopped) return
+    if (this.isStopped) return
     this._clearReconnect()
 
     // Close any existing socket before opening a new one
@@ -41,16 +41,18 @@ export class RemoteMessageSync {
       this.ws = null
     }
 
+    let ws
     try {
-      this.ws = new WebSocket(this._getWebSocketUrl())
+      ws = new WebSocket(this._getWebSocketUrl())
     } catch {
-      this._backendAvailable = false
+      this._scheduleReconnect()
       return
     }
+    this.ws = ws
 
-    const ws = this.ws
     ws.addEventListener('open', () => {
-      this._wsFailCount = 0
+      this._attempts = 0
+      this._setStatus('online')
     })
     ws.addEventListener('message', (event) => this._handleMessage(event))
     ws.addEventListener('close', () => {
@@ -58,7 +60,6 @@ export class RemoteMessageSync {
       if (this.ws === ws) this._scheduleReconnect()
     })
     ws.addEventListener('error', () => {
-      this._wsFailCount++
       if (this.ws === ws) ws.close()
     })
   }
@@ -72,6 +73,12 @@ export class RemoteMessageSync {
     }
   }
 
+  _setStatus(status) {
+    if (this.status === status) return
+    this.status = status
+    if (this.onStatusChange) this.onStatusChange(status)
+  }
+
   _handleMessage(event) {
     try {
       const data = JSON.parse(event.data)
@@ -80,16 +87,14 @@ export class RemoteMessageSync {
   }
 
   _scheduleReconnect() {
-    if (this.isStopped || this._backendAvailable === false || !this._canUseNetwork()) return
+    if (this.isStopped) return
 
-    // After 3 consecutive failures, assume no backend and stop
-    if (this._wsFailCount >= 3) {
-      this._backendAvailable = false
-      return
-    }
-
+    this._setStatus('offline')
     this._clearReconnect()
-    this.reconnectTimer = window.setTimeout(() => this.connect(), 2000)
+
+    const delay = RETRY_BACKOFF_MS[Math.min(this._attempts, RETRY_BACKOFF_MS.length - 1)]
+    this._attempts++
+    this.reconnectTimer = window.setTimeout(() => this.connect(), delay)
   }
 
   _clearReconnect() {
@@ -99,12 +104,7 @@ export class RemoteMessageSync {
     }
   }
 
-  _canUseNetwork() {
-    return window.location.protocol === 'http:' || window.location.protocol === 'https:'
-  }
-
   async _fetchJson(path) {
-    if (!this._canUseNetwork()) return null
     try {
       const response = await fetch(path)
       if (!response.ok) return null

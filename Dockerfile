@@ -32,8 +32,10 @@ RUN pnpm install --frozen-lockfile --filter flipoff-backend --prod \
   && rm -rf /root/.cache /root/.local/share/pnpm/store
 
 COPY --from=backend-build /app/backend/dist ./backend/dist
-# The frontend is served from backend/public, which is also where the server
-# reads config.json for its grid/timing/message defaults.
+# Grid, charset, colour, timing and message defaults. Bind-mount over this path
+# (or point FLIPOFF_CONFIG_PATH elsewhere) to change them without a rebuild.
+COPY backend/config.json ./backend/config.json
+# The frontend the server serves. It is a pure client of /api/config.
 COPY --from=web-build /app/web/dist ./backend/public
 
 ENV NODE_ENV=production

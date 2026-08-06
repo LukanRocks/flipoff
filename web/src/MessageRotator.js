@@ -1,12 +1,11 @@
-import { MESSAGES, MESSAGE_INTERVAL } from './constants.js'
-import { isDynamicMarker, resolveDynamic } from './DynamicMessages.js'
+import { MESSAGE_INTERVAL } from './constants.js'
 
 const DEFAULT_MESSAGE_DURATION_SECONDS = Math.round(MESSAGE_INTERVAL / 1000)
 
 export class MessageRotator {
-  constructor(board, { messages = MESSAGES, messageDurationSeconds = DEFAULT_MESSAGE_DURATION_SECONDS } = {}) {
+  constructor(board, { messages = [], messageDurationSeconds = DEFAULT_MESSAGE_DURATION_SECONDS } = {}) {
     this.board = board
-    this.messages = messages.map((m) => (isDynamicMarker(m) ? m : [...m]))
+    this.messages = messages.map((m) => [...m])
     this.messageDurationSeconds = Number(messageDurationSeconds) || DEFAULT_MESSAGE_DURATION_SECONDS
     this.currentIndex = -1
     this._timer = null
@@ -66,7 +65,7 @@ export class MessageRotator {
 
   // PR #2: Remote override support
   setMessages(messages) {
-    this.messages = Array.isArray(messages) ? messages.map((m) => (isDynamicMarker(m) ? m : [...m])) : []
+    this.messages = Array.isArray(messages) ? messages.map((m) => [...m]) : []
     if (this.currentIndex >= this.messages.length) {
       this.currentIndex = -1
     }
@@ -84,9 +83,7 @@ export class MessageRotator {
     if (this.currentIndex < 0 || this.currentIndex >= this.messages.length) {
       return null
     }
-    const entry = this.messages[this.currentIndex]
-    const resolved = isDynamicMarker(entry) ? resolveDynamic(entry) : entry
-    return resolved.lines || [...resolved]
+    return [...this.messages[this.currentIndex]]
   }
 
   hasStarted() {
@@ -129,15 +126,7 @@ export class MessageRotator {
       }
     }
 
-    // Resolve dynamic messages (datetime, weather, etc.) at display time
-    const entry = this.messages[nextIndex]
-    const resolved = isDynamicMarker(entry) ? resolveDynamic(entry) : entry
-
-    // Dynamic providers return { lines, colors }, static messages are plain arrays
-    const lines = resolved.lines || resolved
-    const colors = resolved.colors || null
-
-    const transition = this.board.displayMessage(lines, { ...options, colors })
+    const transition = this.board.displayMessage(this.messages[nextIndex], options)
 
     if (!transition) {
       return false
@@ -196,21 +185,9 @@ export class MessageRotator {
     }, this.messageDurationSeconds * 1000)
   }
 
-  // On first start: pin datetime at index 0, weather at index 1, shuffle the rest.
-  // Subsequent cycles shuffle everything (including datetime/weather).
   _arrangeInitialOrder() {
-    const datetime = this._extractDynamic('datetime')
-    const weather = this._extractDynamic('weather')
     this._shuffleArray(this.messages)
-    if (weather) this.messages.unshift(weather)
-    if (datetime) this.messages.unshift(datetime)
     this.currentIndex = -1
-  }
-
-  _extractDynamic(type) {
-    const idx = this.messages.findIndex((m) => isDynamicMarker(m) && m.dynamic === type)
-    if (idx === -1) return null
-    return this.messages.splice(idx, 1)[0]
   }
 
   // Fisher-Yates shuffle

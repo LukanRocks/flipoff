@@ -16,7 +16,6 @@ export class Board {
     this.soundEngine = soundEngine
     this.isTransitioning = false
     this.pendingLines = null
-    this.pendingColors = null
     this.tiles = []
     this.currentGrid = []
     this.accentIndex = 0
@@ -140,12 +139,11 @@ export class Board {
     this.currentGrid = this.tiles.map((row) => row.map((tile) => tile.currentChar))
   }
 
-  displayMessage(lines, { interrupt = false, colors = null } = {}) {
+  displayMessage(lines, { interrupt = false } = {}) {
     if (interrupt) {
       this.interruptTransition()
     } else if (this.isTransitioning) {
       this.pendingLines = [...lines]
-      this.pendingColors = colors
       return null
     }
 
@@ -185,35 +183,22 @@ export class Board {
 
     if (!hasChanges) {
       this.currentGrid = newGrid
-      this._applyRowColors(colors)
       this.isTransitioning = false
       return Promise.resolve(false)
     }
 
     return Promise.allSettled(animations).then(() => {
       this.currentGrid = newGrid
-      this._applyRowColors(colors)
       this.isTransitioning = false
 
       if (this.pendingLines) {
         const nextLines = this.pendingLines
-        const nextColors = this.pendingColors
         this.pendingLines = null
-        this.pendingColors = null
-        this.displayMessage(nextLines, { colors: nextColors })
+        this.displayMessage(nextLines)
       }
 
       return true
     })
-  }
-
-  _applyRowColors(colors) {
-    for (let r = 0; r < this.rows; r++) {
-      const color = (colors && colors[r]) || null
-      for (let c = 0; c < this.cols; c++) {
-        this.tiles[r][c].setColor(color)
-      }
-    }
   }
 
   _formatToGrid(lines) {

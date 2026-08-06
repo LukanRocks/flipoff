@@ -59,17 +59,6 @@ export class Tile {
     this.el.style.removeProperty('--flip-duration')
   }
 
-  setColor(color) {
-    const spans = [this.staticTopEl.span, this.staticBottomEl.span, this.topFlapEl.span, this.bottomFlapEl.span]
-    for (const span of spans) {
-      if (color) {
-        span.style.color = color
-      } else {
-        span.style.color = ''
-      }
-    }
-  }
-
   cancelAnimation() {
     this._runId += 1
     this._clearTimers()

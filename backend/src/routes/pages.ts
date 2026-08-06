@@ -19,9 +19,9 @@ function sendPage(response: Response, filename: string): void {
 }
 
 /**
- * The bundle uses relative asset URLs (vite `base: './'`) so it can also deploy
- * to a GitHub Pages sub-path. Those only resolve when the page has no trailing
- * slash, so normalise rather than serving a page whose scripts would 404.
+ * The bundle uses relative asset URLs (vite `base: './'`), which only resolve
+ * when the page has no trailing slash. Normalise rather than serving a page
+ * whose scripts would 404.
  */
 function trailingSlashRedirect(request: Request, response: Response): void {
   response.redirect(301, request.path.replace(/\/+$/, '') || '/')
@@ -35,19 +35,9 @@ export function createPagesRouter(state: AppState): Router {
 
   router.get('/', (_request, response) => sendPage(response, 'index.html'))
   router.get('/index.html', (_request, response) => sendPage(response, 'index.html'))
-  router.get('/control.html', (_request, response) => sendPage(response, 'control.html'))
   router.get('/display.html', (_request, response) => sendPage(response, 'display.html'))
   router.get('/admin', (_request, response) => sendPage(response, 'admin.html'))
   router.get('/admin/', trailingSlashRedirect)
-
-  router.get('/config.json', (_request, response) => {
-    const path = join(WEB_ROOT, 'config.json')
-    if (!existsSync(path)) {
-      response.sendStatus(404)
-      return
-    }
-    response.sendFile(path)
-  })
 
   router.get('/screenshot.png', (_request, response) => {
     const path = join(WEB_ROOT, 'images', 'screenshot.png')

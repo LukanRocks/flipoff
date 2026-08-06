@@ -19,11 +19,12 @@ function firstExisting(...candidates: string[]): string {
 export const WEB_ROOT = firstExisting(join(PACKAGE_ROOT, 'public'), resolve(PACKAGE_ROOT, '..', 'web', 'dist'))
 
 /**
- * Grid, timing and message defaults, read from the same config.json the browser
- * fetches. Prefers the built copy at the served root, then the source in
- * web/public so the server still starts before the frontend has been built.
+ * Grid, charset, colours, timing and message defaults. The browser no longer
+ * reads this file -- it gets all of it from /api/config -- so it lives in the
+ * backend package rather than the served bundle. FLIPOFF_CONFIG_PATH lets a
+ * container bind-mount a different one without rebuilding the image.
  */
-export const DEFAULTS_CONFIG_PATH = firstExisting(join(WEB_ROOT, 'config.json'), resolve(PACKAGE_ROOT, '..', 'web', 'public', 'config.json'))
+export const DEFAULTS_CONFIG_PATH = process.env.FLIPOFF_CONFIG_PATH ?? join(PACKAGE_ROOT, 'config.json')
 
 /** Board settings and screens persist here. Docker mounts a volume over it. */
 export const USER_DATA_DIR = process.env.FLIPOFF_DATA_DIR ?? join(homedir(), '.flipoff')

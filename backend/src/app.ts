@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import cookieParser from 'cookie-parser'
 import express, { type Express } from 'express'
 
-import { WEB_ROOT } from './config/paths'
+import { ADMIN_ROOT, BOARD_ROOT } from './config/paths'
 import { noCacheStaticAssets } from './middleware/no-cache'
 import type { PluginRegistry } from './plugins/base'
 import type { PluginRuntime } from './plugins/runtime'
@@ -31,8 +31,11 @@ export function createApp(state: AppState, plugins: PluginRegistry, hub: WsHub, 
   app.use('/api', createApiRouter(state, plugins, hub))
 
   // Hashed build output. Long-lived caching is safe because the hash changes
-  // with the content.
-  app.use('/assets', express.static(join(WEB_ROOT, 'assets'), { fallthrough: true, maxAge: '1y', immutable: true }))
+  // with the content. One mount per frontend: both builds name their output
+  // directory `assets`, so they can only share an origin by not sharing a URL
+  // prefix. The admin's Vite `base` is what puts its own assets under /admin/.
+  app.use('/assets', express.static(join(BOARD_ROOT, 'assets'), { fallthrough: true, maxAge: '1y', immutable: true }))
+  app.use('/admin/assets', express.static(join(ADMIN_ROOT, 'assets'), { fallthrough: true, maxAge: '1y', immutable: true }))
 
   app.use(createPagesRouter(state))
 

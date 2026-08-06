@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm --parallel --filter flipoff-web --filter flipoff-backend dev",
-    "build": "pnpm -C backend build && pnpm -C web build",
+    "dev": "pnpm --parallel --filter flipoff-board --filter flipoff-admin --filter flipoff-backend dev",
+    "build": "pnpm -C backend build && pnpm -C board build && pnpm -C admin build",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

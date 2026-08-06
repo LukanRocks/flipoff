@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 
 const BACKEND = 'http://localhost:8080'
+const ADMIN_DEV_SERVER = 'http://localhost:5174'
 
 const page = (name: string) => fileURLToPath(new URL(`./${name}.html`, import.meta.url))
 
@@ -31,7 +32,7 @@ function bootPresentation(): unknown {
   try {
     config = JSON.parse(readFileSync(fileURLToPath(new URL('../backend/config.json', import.meta.url)), 'utf8'))
   } catch {
-    // Building web/ without the backend package present.
+    // Building board/ without the backend package present.
     return fallback
   }
 
@@ -63,7 +64,6 @@ export default defineConfig({
       input: {
         index: page('index'),
         display: page('display'),
-        admin: page('admin'),
       },
     },
   },
@@ -71,11 +71,24 @@ export default defineConfig({
     port: 5173,
     // The display reads its entire configuration from /api/config, so this dev
     // server does nothing on its own -- run `pnpm dev` from the root to start
-    // the backend alongside it. The admin page is /admin.html in dev; the
-    // backend's /admin alias is a production-only convenience.
+    // the backend alongside it.
     proxy: {
       '/api': BACKEND,
       '/ws': { target: BACKEND, ws: true },
+      // The header's Admin link points at /admin, which in production is the
+      // admin package served by the backend. Forwarding it to the admin dev
+      // server keeps that link working here too, rather than 404ing on a path
+      // this server knows nothing about. `ws` carries the admin's HMR socket.
+      //
+      // The rewrite bridges a difference in convention: the backend serves the
+      // admin at /admin and redirects /admin/ to it, while a Vite dev server
+      // with base '/admin/' serves only the trailing-slash form and redirects
+      // nothing. Without this, the link works in production and 404s here.
+      '/admin': {
+        target: ADMIN_DEV_SERVER,
+        ws: true,
+        rewrite: (path) => (path === '/admin' ? '/admin/' : path),
+      },
     },
   },
 })

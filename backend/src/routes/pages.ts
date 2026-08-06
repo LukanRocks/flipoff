@@ -5,14 +5,18 @@ import { Router, type Request, type Response } from 'express'
 
 import { coerceSlug } from '../board/normalize'
 import { getBoard } from '../board/registry'
-import { WEB_ROOT } from '../config/paths'
+import { ADMIN_ROOT, BOARD_ROOT } from '../config/paths'
 import type { AppState } from '../types'
 import { asyncRoute, jsonError } from './helpers'
 
-function sendPage(response: Response, filename: string): void {
-  const path = join(WEB_ROOT, filename)
+/** Which package to build, named in the 503 when a frontend is missing. */
+const PACKAGE_OF: Record<string, string> = { [BOARD_ROOT]: 'board', [ADMIN_ROOT]: 'admin' }
+
+function sendPage(response: Response, root: string, filename: string): void {
+  const path = join(root, filename)
   if (!existsSync(path)) {
-    response.status(503).type('text/plain').send(`FlipOff frontend is not built. Run \`pnpm -C web build\`.\nExpected: ${path}`)
+    const packageName = PACKAGE_OF[root] ?? 'board'
+    response.status(503).type('text/plain').send(`FlipOff frontend is not built. Run \`pnpm -C ${packageName} build\`.\nExpected: ${path}`)
     return
   }
   response.sendFile(path)
@@ -33,14 +37,17 @@ export function createPagesRouter(state: AppState): Router {
   // served at a URL where its relative asset paths resolve one level too deep.
   const router = Router({ strict: true })
 
-  router.get('/', (_request, response) => sendPage(response, 'index.html'))
-  router.get('/index.html', (_request, response) => sendPage(response, 'index.html'))
-  router.get('/display.html', (_request, response) => sendPage(response, 'display.html'))
-  router.get('/admin', (_request, response) => sendPage(response, 'admin.html'))
+  router.get('/', (_request, response) => sendPage(response, BOARD_ROOT, 'index.html'))
+  router.get('/index.html', (_request, response) => sendPage(response, BOARD_ROOT, 'index.html'))
+  router.get('/display.html', (_request, response) => sendPage(response, BOARD_ROOT, 'display.html'))
+
+  // The admin is a separate package, so its own index.html -- same filename as
+  // the board's, different root.
+  router.get('/admin', (_request, response) => sendPage(response, ADMIN_ROOT, 'index.html'))
   router.get('/admin/', trailingSlashRedirect)
 
   router.get('/screenshot.png', (_request, response) => {
-    const path = join(WEB_ROOT, 'images', 'screenshot.png')
+    const path = join(BOARD_ROOT, 'images', 'screenshot.png')
     if (!existsSync(path)) {
       response.sendStatus(404)
       return
@@ -66,7 +73,7 @@ export function createPagesRouter(state: AppState): Router {
         jsonError(response, 'Board not found.', 404)
         return
       }
-      sendPage(response, 'index.html')
+      sendPage(response, BOARD_ROOT, 'index.html')
     }),
   )
   router.get('/:boardSlug/', trailingSlashRedirect)

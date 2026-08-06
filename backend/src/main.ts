@@ -5,7 +5,7 @@ import { announceAdminPassword, resolveAdminPassword } from './auth/password'
 import { loadBoardConfigs, saveBoardSettings } from './board/config'
 import { buildRegistry } from './board/registry'
 import { loadScreensPayload, saveScreens } from './board/screens'
-import { CONFIG_PATH, SCREENS_PATH, WEB_ROOT } from './config/paths'
+import { ADMIN_ROOT, BOARD_ROOT, CONFIG_PATH, SCREENS_PATH } from './config/paths'
 import { loadPlugins } from './plugins'
 import { loadConfigPayload } from './board/config'
 import { normalizePluginCommonSettings } from './plugins/base'
@@ -63,7 +63,9 @@ function main(): void {
 
   server.listen(PORT, '0.0.0.0', () => {
     announceAdminPassword(adminPassword)
-    console.log(`[flipoff] Serving ${WEB_ROOT} on http://0.0.0.0:${PORT}`)
+    console.log(`[flipoff] Listening on http://0.0.0.0:${PORT}`)
+    console.log(`[flipoff]   board ${BOARD_ROOT}`)
+    console.log(`[flipoff]   admin ${ADMIN_ROOT}`)
     void runtime.startAll()
   })
 

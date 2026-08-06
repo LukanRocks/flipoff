@@ -1,5 +1,6 @@
 packages:
-  - 'web'
+  - 'board'
+  - 'admin'
   - 'backend'
 
 # Supply-chain hardening

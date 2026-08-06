@@ -13,10 +13,14 @@ function firstExisting(...candidates: string[]): string {
 }
 
 /**
- * The built frontend. In a container the web build is copied to backend/public;
- * in development it is still sitting in the sibling package as web/dist.
+ * The two built frontends. They are separate packages with separate Vite
+ * builds, and both emit an `assets` directory -- so they are mounted at
+ * separate URL prefixes (/assets and /admin/assets) and tracked here as
+ * separate roots. In a container each build is copied under backend/public;
+ * in development each is still sitting in its own sibling package.
  */
-export const WEB_ROOT = firstExisting(join(PACKAGE_ROOT, 'public'), resolve(PACKAGE_ROOT, '..', 'web', 'dist'))
+export const BOARD_ROOT = firstExisting(join(PACKAGE_ROOT, 'public', 'board'), resolve(PACKAGE_ROOT, '..', 'board', 'dist'))
+export const ADMIN_ROOT = firstExisting(join(PACKAGE_ROOT, 'public', 'admin'), resolve(PACKAGE_ROOT, '..', 'admin', 'dist'))
 
 /**
  * Grid, charset, colours, timing and message defaults. The browser no longer

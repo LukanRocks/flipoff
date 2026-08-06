@@ -9,30 +9,50 @@ import { SoundEngine } from './SoundEngine.js'
 import { MessageRotator } from './MessageRotator.js'
 import { KeyboardController } from './KeyboardController.js'
 import { RemoteMessageSync } from './RemoteMessageSync.js'
-import { BOARD_CONFIG, BOARD_SLUG } from './constants.js'
+import { BOARD_SLUG, BOOT_PRESENTATION, cachePresentation, fetchConfig, samePresentation } from './config.js'
+import { connectingLines, failureLines, reconnectingLines } from './statusScreen.js'
 
-// Module scripts are deferred — DOM is already parsed when this runs.
-// Do NOT use DOMContentLoaded: top-level await in constants.js can cause
-// that event to fire before this module executes, so the listener would miss it.
+/**
+ * How long the board keeps showing its rotation after the socket drops. A
+ * container restart is over in about a second, and blanking the display for
+ * every one of those would be worse than the stale content it prevents.
+ */
+const OFFLINE_GRACE_MS = 20_000
+
+// Module scripts are deferred — the DOM is already parsed when this runs.
 void bootstrap()
 
 async function bootstrap() {
   const boardContainer = document.getElementById('board-container')
   if (!boardContainer) return
 
-  // constants.js has already blocked on /api/config, so reaching this line
-  // means the backend answered. Clear the shell's connecting message.
-  document.getElementById('boot-status')?.remove()
+  // Built before the server has been asked anything, so the wait and any
+  // failures happen on the board rather than only in the console.
+  let board = new Board(boardContainer, null, BOOT_PRESENTATION)
+  board.displayMessage(connectingLines())
+
+  const displayConfig = await fetchConfig((failure) => board.displayMessage(failureLines(failure)))
+  cachePresentation(displayConfig)
+
+  // A board whose layout already matches is kept as-is: the status message just
+  // flips into the first real screen, with no rebuild and no visible swap.
+  if (!samePresentation(BOOT_PRESENTATION, displayConfig)) {
+    boardContainer.replaceChildren()
+    board = new Board(boardContainer, null, displayConfig)
+  }
 
   const soundEngine = new SoundEngine()
-  const displayConfig = BOARD_CONFIG
+  board.setSoundEngine(soundEngine)
+
   let layoutSignature = serializeLayout(displayConfig)
 
   const remoteSync = new RemoteMessageSync(handleRealtimeEvent, BOARD_SLUG, handleConnectionStatus)
   remoteSync.setActiveBoardSlug(displayConfig.boardSlug)
 
   let remoteOverrideActive = false
-  const board = new Board(boardContainer, soundEngine, displayConfig)
+  let offlineTimer = null
+  let showingOfflineScreen = false
+
   const rotator = new MessageRotator(board, {
     messages: displayConfig.defaultMessages,
     messageDurationSeconds: displayConfig.messageDurationSeconds,
@@ -139,17 +159,48 @@ async function bootstrap() {
   if (initialMessageState?.hasOverride) {
     handleMessageState(initialMessageState)
   } else {
-    rotator.start()
+    // interrupt: the board may still be animating the connecting or failure
+    // screen, and without this the first real message only queues behind it.
+    rotator.start({ interrupt: true })
   }
 
   remoteSync.connect()
 
   function handleConnectionStatus(status) {
     const indicator = document.getElementById('config-indicator')
-    if (!indicator) return
-    indicator.classList.toggle('online', status === 'online')
-    indicator.classList.toggle('offline', status !== 'online')
-    indicator.title = status === 'online' ? 'Connected to server' : 'Reconnecting to server…'
+    if (indicator) {
+      indicator.classList.toggle('online', status === 'online')
+      indicator.classList.toggle('offline', status !== 'online')
+      indicator.title = status === 'online' ? 'Connected to server' : 'Reconnecting to server…'
+    }
+
+    if (status === 'online') {
+      clearOfflineTimer()
+      if (showingOfflineScreen) {
+        // The hub seeds every new client with config_state and message_state on
+        // connect, so real content is already on its way — this just gets the
+        // rotation running again underneath it.
+        showingOfflineScreen = false
+        rotator.start({ interrupt: true })
+      }
+      return
+    }
+
+    if (offlineTimer === null && !showingOfflineScreen) {
+      offlineTimer = window.setTimeout(() => {
+        offlineTimer = null
+        showingOfflineScreen = true
+        rotator.stop()
+        board.displayMessage(reconnectingLines(), { interrupt: true })
+      }, OFFLINE_GRACE_MS)
+    }
+  }
+
+  function clearOfflineTimer() {
+    if (offlineTimer !== null) {
+      window.clearTimeout(offlineTimer)
+      offlineTimer = null
+    }
   }
 
   function handleRealtimeEvent(event) {
@@ -178,6 +229,7 @@ async function bootstrap() {
     const nextLayout = serializeLayout(nextConfig)
     if (nextLayout !== layoutSignature) {
       layoutSignature = nextLayout
+      cachePresentation(nextConfig)
       window.location.reload()
       return
     }

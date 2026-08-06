@@ -4,8 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#111111" />
-    <title>FlipOff. — Free Split-Flap Display for Any TV</title>
+    <title>FlipOff.</title>
   </head>
+
   <body>
     <div class="page-frame">
       <!-- Header -->
@@ -36,10 +37,7 @@
       </header>
 
       <!-- Board -->
-      <main class="board-section" id="board-container" role="status" aria-live="polite" aria-label="Split-flap message display">
-        <!-- Shown until /api/config answers; main.js removes it once the board mounts. -->
-        <p class="boot-status" id="boot-status">Connecting to server…</p>
-      </main>
+      <main class="board-section" id="board-container" role="status" aria-live="polite" aria-label="Split-flap message display"></main>
 
       <!-- Countdown bar (hidden in fullscreen) -->
       <div class="countdown-bar" id="countdown-bar" role="progressbar" aria-label="Time until next message">

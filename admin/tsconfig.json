@@ -1,10 +1,13 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "target": "ES2023",
+    // ES2023 for the non-mutating array methods (toSpliced), which keep
+    // reordering screens a pure operation on React state.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "types": ["vite/client", "node"],
+    "jsx": "react-jsx",
     "allowJs": true,
     "checkJs": false,
     "noEmit": true,

@@ -12,8 +12,10 @@ server). Prettier at root, no semicolons, single quotes, 180 print width.
 - **`board/`** — vanilla ES modules under Vite. **No React, no Tailwind, no component
   framework.** The split-flap animation is hand-tuned DOM + CSS; keep it that way. This
   rule is about this package specifically, not the repo.
-- **`admin/`** — the admin dashboard, a separate Vite build. Different rules: it is an
-  ordinary form-and-table app and is free to use a framework.
+- **`admin/`** — the admin dashboard: React 19 + TypeScript + `react-router`, a separate
+  Vite build. Different rules from the board on purpose — it is an ordinary form-and-table
+  app. `admin build` runs `tsc --noEmit` first, because `vite build` strips types without
+  checking them.
 - **`backend/`** — Express + `ws`, state persisted as JSON files in `~/.flipoff`.
 
 The backend serves `board/dist` and `admin/dist` (or `backend/public/{board,admin}` in a
@@ -147,17 +149,54 @@ lines. Two things bite here:
   whatever it was given, which is how emoji render at all. `Board._formatToGrid` segments
   lines with `Intl.Segmenter` so a multi-code-point emoji occupies one tile.
 
+## The admin's CSS is the spec, not the components
+
+`admin/src/css/admin.css` came over from the imperative admin **unchanged**, and the React
+components are written to emit the markup it already styles. That makes the rewrite
+checkable: if a page looks different, it is a bug, not a redesign. Two ways to break it
+that are not obvious from reading a component:
+
+- **A class name is a contract.** Renaming one, or flattening a wrapper that looks
+  redundant, silently changes layout. `HomePage`'s rotation rows really do nest
+  `.rotation-item-head` inside `.stack.compact-stack` inside another `.rotation-item-head`
+  — the outer flex sizes to its content so the inner one can space-between across a
+  narrower width. Flatten it and the title slams into the right edge.
+- **One rule keys off an `id`.** `.settings-panel #settings-form` widens the form gap from
+  20px to 30px. It is the only id-based selector in the file; drop the id and the Settings
+  page quietly loses 50px of height.
+
+## Screen drafts are local until you press Save
+
+The Screens page edits a `drafts` array held in `App`, not in the page — the imperative
+admin kept it in module state and both Settings and the board switcher refuse to act while
+it is dirty, so unmounting it on navigation would change behaviour.
+
+Only `POST /screens/:id/refresh` acts immediately, and it is blocked while dirty because
+the server would refresh a configuration different from the one on screen. Everything else
+— add, edit, reorder, delete — is local until **Save Screens**.
+
+`useAdminData` refetches the whole snapshot after every mutation rather than patching
+state, which is what the old `loadAdminState()` did across the same six endpoints. That is
+why there is no query library and nothing to invalidate. The `requestRef` counter exists
+because switching boards quickly can interleave two in-flight snapshots.
+
 ## API and WebSocket contracts are frozen
 
-`admin/src/admin.js` (1,700+ lines) and `board/src/RemoteMessageSync.js` are hand-written
-against the existing routes and the `/ws` event shape (`{type, payload}` with
-`message_state` / `config_state`). Server changes must preserve those paths and payloads
-unless you are also updating both clients.
+`admin/src/api/` and `board/src/RemoteMessageSync.js` are hand-written against the existing
+routes and the `/ws` event shape (`{type, payload}` with `message_state` / `config_state`).
+Server changes must preserve those paths and payloads unless you are also updating both
+clients.
+
+`admin/src/api/types.ts` mirrors the backend's `buildAdmin*Response`,
+`serializeScreenForAdmin` and `serializeManifest` by hand. It has to: those all return
+`Record<string, unknown>`, so importing them across the package boundary would check
+nothing. Change a serializer and change that file in the same commit.
 
 Plugin `plugin_id` values are persisted in `~/.flipoff/screens.json`. Renaming one orphans
 a user's screen — treat them as a stable identifier.
 
 ## Ports
 
-`web` dev server 5173 (proxies `/api` and `/ws` to the backend), backend 8080. The dev
+`board` dev server 5173 (proxies `/api` and `/ws` to the backend, and `/admin` to the admin
+dev server), `admin` 5174, backend 8080. The dev
 server is useless without the backend — see above.

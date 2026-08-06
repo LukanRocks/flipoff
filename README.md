@@ -58,6 +58,7 @@ http://localhost:5173 behaves like the deployed app.
 | ------------------------------------ | -------------------------------------------------- |
 | `http://localhost:8080`              | Display                                            |
 | `http://localhost:8080/admin`        | Admin dashboard (network-wide, password-protected) |
+| `http://localhost:8080/admin/screens` | Straight to a dashboard page — every admin page has its own URL |
 | `http://localhost:8080/display.html` | Standalone fullscreen display (no header/hero)     |
 | `http://localhost:8080/<board-slug>` | A secondary board                                  |
 
@@ -154,11 +155,17 @@ flipoff/
         board.css         — Board container, accent bars, shortcuts overlay
         tile.css          — Split-flap tile halves and flip animations
         responsive.css    — Media queries (mobile through 4K)
-  admin/
-    index.html            — Admin dashboard
+  admin/                  — React + TypeScript dashboard
+    index.html            — App shell
     vite.config.ts        — Build config: base '/admin/', dev proxy to the backend
     src/
-      admin.js            — Admin dashboard UI
+      main.tsx            — Entry point and routes (/admin, /send, /screens, /settings)
+      App.tsx             — Session gate, board switching, screen drafts
+      api/                — Typed client and the admin API response shapes
+      state/              — Snapshot loading, status banner, router context
+      components/         — Layout, login, screen modal, plugin schema fields
+      pages/              — Home, Send Message, Screens, Settings
+      lib/                — Formatting and screen helpers
       css/
         reset.css         — CSS reset (its own copy; the packages share nothing)
         admin.css         — Admin dashboard styles

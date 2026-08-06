@@ -46,6 +46,13 @@ export function createPagesRouter(state: AppState): Router {
   router.get('/admin', (_request, response) => sendPage(response, ADMIN_ROOT, 'index.html'))
   router.get('/admin/', trailingSlashRedirect)
 
+  // The admin routes client-side, so every /admin/* path is the same document.
+  // Declared before /:boardSlug so a board can never shadow it -- though
+  // RESERVED_BOARD_SLUGS also stops anyone creating a board called 'admin'.
+  // /admin/assets is already served by the static mount in app.ts and never
+  // reaches this router.
+  router.get('/admin/:page', (_request, response) => sendPage(response, ADMIN_ROOT, 'index.html'))
+
   router.get('/screenshot.png', (_request, response) => {
     const path = join(BOARD_ROOT, 'images', 'screenshot.png')
     if (!existsSync(path)) {

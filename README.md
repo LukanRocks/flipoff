@@ -21,7 +21,7 @@ No accounts. No subscriptions. No $199 fee. Build it once and go.
 - Countdown progress bar showing time until next message (hidden in fullscreen)
 - Config source indicator (green dot = config.json loaded, orange = using built-in defaults)
 - Control panel for custom messages, clock, countdown, and message queue (same-browser, no server needed)
-- Optional Python backend with admin dashboard, plugin system, and real-time WebSocket sync
+- Optional Node backend with admin dashboard, plugin system, and real-time WebSocket sync
 - Built-in plugins: Weather forecast, GitHub stats, Quote of the Day, Crypto prices
 - Multi-board support — run multiple independent displays from one server
 - Fullscreen TV mode with automatic tile resizing
@@ -98,15 +98,15 @@ cd flipoff
 # With Docker (recommended):
 docker compose up --build
 
-# Or without Docker:
-pnpm install && pnpm -C web build
-pip install -r backend/requirements.txt
-python backend/server.py
+# Or without Docker (needs Node 22+):
+pnpm install
+pnpm build
+pnpm -C backend start
 ```
 
 The backend serves `web/dist`, so the frontend has to be built before it will show
-anything. Running it outside Docker needs **Python 3.10 or newer** — note that macOS ships
-3.9, which will not start the server.
+anything. For development, `pnpm dev` runs the Vite dev server on
+http://localhost:5173 and the backend on 8080 together, with `/api` and `/ws` proxied.
 
 | URL                                  | What                                               |
 | ------------------------------------ | -------------------------------------------------- |
@@ -144,7 +144,7 @@ Add dynamic messages to `web/public/config.json` alongside regular quotes:
 |                      | Control Panel                                   | Admin Dashboard                                            |
 | -------------------- | ----------------------------------------------- | ---------------------------------------------------------- |
 | **How it works**     | BroadcastChannel (tab-to-tab)                   | REST API + WebSocket                                       |
-| **Requires backend** | No                                              | Yes (`python backend/server.py`)                           |
+| **Requires backend** | No                                              | Yes (`pnpm -C backend start`)                              |
 | **Reach**            | Same browser only                               | Any device on the network                                  |
 | **Auth**             | None                                            | Password                                                   |
 | **Features**         | Custom message, clock, countdown, message queue | Board config, screen management, plugins, message override |
@@ -216,20 +216,24 @@ flipoff/
         control.css       — Control panel dark theme
         admin.css         — Admin dashboard styles
   backend/
-    server.py             — Backend (aiohttp) with API, WebSocket, plugins
-    requirements.txt      — Python dependencies
-    plugins/
-      base.py             — ScreenPlugin base class and types
-      __init__.py         — Plugin discovery and loader
-      weather/            — Open-Meteo 3-day forecast
-      github/             — Repo stats, open issues/PRs
-      api_ninjas/         — Quote of the Day, random quotes, crypto prices
-    tests/                — Backend, plugin, and config.json test suite
+    src/
+      main.ts             — Entry point, http server, WebSocket upgrade
+      app.ts              — Express app: middleware, routes, static serving
+      types.ts            — Shared state and screen types
+      config/             — Data paths and config.json-derived defaults
+      board/              — Board config, screens, registry, validation
+      auth/               — bcrypt password handling and admin sessions
+      ws/                 — WebSocket hub and per-board broadcast
+      routes/             — pages, /api, /api/admin
+      middleware/         — Cache headers
+      plugins/
+        base.ts           — Plugin types, manifests, schema validation
+        index.ts          — Plugin registry (add new plugins here)
+        runtime.ts        — Refresh loops and error handling
+        weather/          — Open-Meteo 3-day forecast
+        github/           — Repo stats, open issues/PRs
+        api-ninjas/       — Quote of the Day, random quotes, crypto prices
 ```
-
-> The backend is mid-migration from Python to TypeScript. `backend/server.py` is the
-> current implementation; the port replaces it with `backend/src/` and drops
-> `requirements.txt`.
 
 ## Customization
 

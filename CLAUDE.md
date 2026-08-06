@@ -13,13 +13,11 @@ single quotes, 180 print width.
   framework.** The split-flap animation is hand-tuned DOM + CSS; keep it that way.
 - **`backend/`** — Express + `ws`, state persisted as JSON files in `~/.flipoff`.
 
-> **Migration in progress.** The backend is still Python (`backend/server.py`, aiohttp)
-> until the TypeScript port lands. `pnpm -C backend dev` shells out to `python3` and needs
-> **Python 3.10+** (`server.py` uses `dataclass(slots=True)`); macOS system Python is 3.9
-> and will not run it. `pnpm -C backend build` is a deliberate no-op until the port.
->
-> The backend serves `web/dist`, not raw source — run `pnpm -C web build` at least once or
-> it has nothing to serve.
+The backend serves `web/dist` (or `backend/public` in a container), not raw source — run
+`pnpm -C web build` at least once or it has nothing to serve.
+
+TypeScript 6 no longer loads `@types/*` into global scope automatically. `backend/tsconfig.json`
+names them in `types: ["node"]`; dropping that breaks every `process` and `__dirname`.
 
 ## The two runtime modes — read this before touching config or fetch code
 
@@ -45,6 +43,16 @@ the message rotation. It is read **twice, independently**:
 
 It lives in `public/` and not `src/` on purpose: it must land at the bundle root as plain
 JSON so a user can edit it in a deployed build without rebuilding. Do not `import` it.
+
+## State lives in JSON files, and the format is load-bearing
+
+Board settings and screens persist as `~/.flipoff/{config,screens}.json`. These files were
+originally written by a Python server using `json.dump(..., ensure_ascii=True)`, so non-ASCII
+is escaped as `\uXXXX`. `dumpJson()` in `util/text.ts` reproduces that exactly — an existing
+install upgrades with a zero-byte diff. Do not swap it for plain `JSON.stringify`.
+
+Admin password hashes are bcrypt `$2b$`, written by Python's `bcrypt` and read by `bcryptjs`.
+They stay compatible; changing the hashing library would lock existing users out.
 
 ## Board text rules
 

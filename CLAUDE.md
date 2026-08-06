@@ -25,15 +25,40 @@ names them in `types: ["node"]`; dropping that breaks every `process` and `__dir
 grid, charset, accent colours, animation timing and the whole rotation all arrive in one
 `/api/config` response, and live updates come over `/ws`.
 
-There is deliberately no local fallback. `web/src/constants.js` blocks the module graph on
-`/api/config` and retries with backoff until the server answers; the HTML shells show a
-static "Connecting to server…" message that `main.js` removes once the board mounts. If
-you find yourself adding a "when the backend is missing" branch, that is the thing this
-architecture removed — a board rendering built-in defaults hides an outage instead of
+There is deliberately no local fallback for **content**. If you find yourself adding a
+"when the backend is missing" branch that renders messages, that is the thing this
+architecture removed — a board showing built-in defaults hides an outage instead of
 showing it.
 
-The corollary is that `pnpm -C web dev` alone renders nothing. Run `pnpm dev` from the
-root so the backend comes up alongside Vite.
+The corollary is that `pnpm -C web dev` alone renders nothing useful. Run `pnpm dev` from
+the root so the backend comes up alongside Vite.
+
+## The board reports its own connection state
+
+`main.js` builds a board *before* asking the server anything, so waiting and failing happen
+on the split-flap itself rather than only in the console. `statusScreen.js` holds those
+screens — connecting, failure (headline, reason, retry countdown), reconnecting — as plain
+`string[]`, which `Board._formatToGrid` centres like any other message.
+
+That is only possible because **`Board` and `Tile` take their config as arguments**. They
+used to import it, which chained them to a module-level `await` on `/api/config` and meant
+no board could exist until the server answered. Keep them injected.
+
+`BOOT_PRESENTATION` in `config.js` is the one sanctioned set of built-in defaults, and it
+is deliberately narrow: grid, charset, accent colours, flip timings — never messages. It
+comes from `localStorage` (written on every successful config fetch) or, failing that,
+from `backend/config.json` inlined at build time by a Vite `define`, so a first-ever load
+comes up at whatever size a fresh backend serves. Read `vite.config.ts`'s
+`bootPresentation()` before changing either half.
+
+Two things follow that are easy to get wrong:
+
+- **Handing off to real content must interrupt.** The board is mid-animation on a status
+  screen, so `rotator.start({ interrupt: true })` — without it, `next()` only queues into
+  the board's `pendingLines`, returns false, and the rotation silently never starts.
+- **A dropped socket does not blank the board immediately.** `OFFLINE_GRACE_MS` keeps the
+  rotation up for ~20s first, because a container restart is over in about a second and
+  wiping the display for each one is worse than the staleness it prevents.
 
 ## config.json is backend-only
 

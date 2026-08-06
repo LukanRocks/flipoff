@@ -1,21 +1,31 @@
 import { Tile } from './Tile.js'
-import { GRID_COLS, GRID_ROWS, STAGGER_DELAY, ACCENT_COLORS } from './constants.js'
 
-// PR #1: Display mode accent color palettes
 const DISPLAY_MODES = ['color', 'matrix', 'grayscale']
-const ACCENT_COLORS_BY_MODE = {
-  color: ACCENT_COLORS,
+
+// PR #1: Display mode accent palettes. Only 'color' is server-configurable —
+// matrix and grayscale are fixed looks, not board settings.
+const FIXED_ACCENTS = {
   matrix: ['#00FF41', '#00CC33', '#00FF88', '#003B00', '#00FF41'],
   grayscale: ['#888888', '#AAAAAA', '#666666', '#CCCCCC', '#555555'],
 }
 
 export class Board {
-  constructor(containerEl, soundEngine, config = {}) {
-    this.cols = Number(config.cols) || GRID_COLS
-    this.rows = Number(config.rows) || GRID_ROWS
+  /**
+   * `config` is the /api/config shape: { cols, rows, charset, accentColors,
+   * timing }. Taken as an argument rather than imported so a board can be built
+   * before the server answers, which is how the connecting and error screens
+   * get somewhere to render.
+   */
+  constructor(containerEl, soundEngine, config) {
+    this.cols = config.cols
+    this.rows = config.rows
+    this.staggerDelay = config.timing.staggerDelay
+    this.accentsByMode = { ...FIXED_ACCENTS, color: config.accentColors }
     this.soundEngine = soundEngine
     this.isTransitioning = false
     this.pendingLines = null
+    // Bumped per transition so a superseded one cannot apply its result late.
+    this._transitionVersion = 0
     this.tiles = []
     this.currentGrid = []
     this.accentIndex = 0
@@ -35,11 +45,19 @@ export class Board {
     this.gridEl = document.createElement('div')
     this.gridEl.className = 'tile-grid'
 
+    // One shared object rather than a copy per tile — a 28x5 board is 140 of them.
+    const tileTheme = {
+      charset: config.charset,
+      flipStepDuration: config.timing.flipStepDuration,
+      flipStepFastDuration: config.timing.flipStepFastDuration,
+      flipSettleDuration: config.timing.flipSettleDuration,
+    }
+
     for (let r = 0; r < this.rows; r++) {
       const row = []
       const charRow = []
       for (let c = 0; c < this.cols; c++) {
-        const tile = new Tile(r, c, this.cols)
+        const tile = new Tile(r, c, this.cols, tileTheme)
         tile.setChar(' ')
         this.gridEl.appendChild(tile.el)
         row.push(tile)
@@ -110,8 +128,14 @@ export class Board {
     return DISPLAY_MODES[this.modeIndex]
   }
 
+  /** Lets the silent boot board adopt the real engine without being rebuilt. */
+  setSoundEngine(soundEngine) {
+    this.soundEngine = soundEngine
+    this._syncSoundShortcutLabel()
+  }
+
   _updateAccentColors() {
-    const palette = ACCENT_COLORS_BY_MODE[this.displayMode]
+    const palette = this.accentsByMode[this.displayMode]
     const color = palette[this.accentIndex % palette.length]
     const segments = this.boardEl.querySelectorAll('.accent-segment')
     segments.forEach((seg) => {
@@ -127,6 +151,7 @@ export class Board {
 
   // PR #2: interrupt support
   interruptTransition() {
+    this._transitionVersion += 1
     this.pendingLines = null
     this.isTransitioning = false
 
@@ -148,6 +173,8 @@ export class Board {
     }
 
     this.isTransitioning = true
+    this._transitionVersion += 1
+    const version = this._transitionVersion
 
     const newGrid = this._formatToGrid(lines)
 
@@ -161,7 +188,7 @@ export class Board {
         const oldChar = this.currentGrid[r][c]
 
         if (newChar !== oldChar) {
-          const delay = (r * this.cols + c) * STAGGER_DELAY
+          const delay = (r * this.cols + c) * this.staggerDelay
           const tile = this.tiles[r][c]
           const plan = tile.getTransitionPlan(newChar, delay)
 
@@ -188,6 +215,12 @@ export class Board {
     }
 
     return Promise.allSettled(animations).then(() => {
+      // An interrupt (or a newer message) already took over. Applying this
+      // grid would desync currentGrid from what the tiles actually show, and
+      // the next diff would skip tiles that are still mid-flip -- leaving them
+      // stuck with .is-flipping and never repainted.
+      if (version !== this._transitionVersion) return false
+
       this.currentGrid = newGrid
       this.isTransitioning = false
 

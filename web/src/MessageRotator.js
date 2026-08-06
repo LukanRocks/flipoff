@@ -1,6 +1,6 @@
-import { MESSAGE_INTERVAL } from './constants.js'
-
-const DEFAULT_MESSAGE_DURATION_SECONDS = Math.round(MESSAGE_INTERVAL / 1000)
+// Only reached if a caller omits messageDurationSeconds; main.js always passes
+// the server's value.
+const DEFAULT_MESSAGE_DURATION_SECONDS = 5
 
 export class MessageRotator {
   constructor(board, { messages = [], messageDurationSeconds = DEFAULT_MESSAGE_DURATION_SECONDS } = {}) {
@@ -26,12 +26,17 @@ export class MessageRotator {
     return Math.min(1, elapsed / this._countdownDuration)
   }
 
-  start({ immediate = true } = {}) {
+  /**
+   * `interrupt` is needed whenever the board might still be animating something
+   * disposable — a status screen. Without it `next()` only queues into the
+   * board's pendingLines, returns false, and the rotation never actually starts.
+   */
+  start({ immediate = true, interrupt = false } = {}) {
     this._running = true
     this._paused = false
     this._arrangeInitialOrder()
     if (immediate) {
-      this.next()
+      this.next({ interrupt })
     } else {
       this._scheduleNext()
     }

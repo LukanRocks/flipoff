@@ -1,10 +1,20 @@
-import { CHARSET, FLIP_STEP_DURATION, FLIP_STEP_FAST_DURATION, FLIP_SETTLE_DURATION, MIN_VISIBLE_FLIPS, MAX_VISIBLE_FLIPS } from './constants.js'
+// How many flaps a viewer actually sees. Not configurable: these are tuned
+// against the CSS animation, not something the server has an opinion about.
+const MIN_VISIBLE_FLIPS = 3
+const MAX_VISIBLE_FLIPS = 10
 
 export class Tile {
-  constructor(row, col, boardCols = 22) {
+  /**
+   * `theme` carries the charset and flip timings. They arrive from /api/config
+   * and are passed down rather than imported, so a Tile can be built before the
+   * server has answered -- which is what lets the board draw its own connecting
+   * and error screens.
+   */
+  constructor(row, col, boardCols, theme) {
     this.row = row
     this.col = col
     this.boardCols = boardCols
+    this.theme = theme
     this.currentChar = ' '
     this.isAnimating = false
     this._timeouts = new Set()
@@ -62,9 +72,16 @@ export class Tile {
   cancelAnimation() {
     this._runId += 1
     this._clearTimers()
-    this.el.classList.remove('is-flipping')
-    this.el.style.removeProperty('--flip-duration')
     this.isAnimating = false
+
+    // Snap the DOM back to currentChar rather than just dropping the class.
+    // _flipStep paints the *next* character into the static halves at its
+    // halfway point but only advances currentChar at the very end, so a step
+    // interrupted in between leaves the tile showing one character while
+    // currentChar holds another. Board rebuilds its grid from currentChar, so
+    // that mismatch makes it believe the tile is already correct: no new
+    // transition is planned and the stale glyph stays put, mid-flip, forever.
+    this.setChar(this.currentChar)
   }
 
   async flipTo(targetChar, delay = 0, transitionPlan = null) {
@@ -116,7 +133,7 @@ export class Tile {
         isFinal: i === path.length - 1,
       })
 
-      elapsed += duration + FLIP_SETTLE_DURATION
+      elapsed += duration + this.theme.flipSettleDuration
     }
 
     return {
@@ -128,9 +145,10 @@ export class Tile {
   }
 
   _buildVisiblePath(targetChar) {
-    const charsetLength = CHARSET.length
-    const startInCharset = CHARSET.indexOf(this.currentChar) !== -1
-    const endInCharset = CHARSET.indexOf(targetChar) !== -1
+    const charset = this.theme.charset
+    const charsetLength = charset.length
+    const startInCharset = charset.indexOf(this.currentChar) !== -1
+    const endInCharset = charset.indexOf(targetChar) !== -1
 
     // If either char is outside the charset (emoji, etc.), do a short
     // flip through a few random charset chars then land on the target.
@@ -138,7 +156,7 @@ export class Tile {
       const flips = MIN_VISIBLE_FLIPS
       const path = []
       for (let i = 0; i < flips; i++) {
-        path.push(CHARSET[Math.floor(Math.random() * charsetLength)])
+        path.push(charset[Math.floor(Math.random() * charsetLength)])
       }
       path.push(targetChar)
       return path
@@ -153,7 +171,7 @@ export class Tile {
     }
 
     if (distance <= MAX_VISIBLE_FLIPS) {
-      return Array.from({ length: distance }, (_, index) => CHARSET[(startIndex + index + 1) % charsetLength])
+      return Array.from({ length: distance }, (_, index) => charset[(startIndex + index + 1) % charsetLength])
     }
 
     const visibleSteps = Math.min(MAX_VISIBLE_FLIPS, Math.max(MIN_VISIBLE_FLIPS, Math.round(distance / 4)))
@@ -163,7 +181,7 @@ export class Tile {
     for (let stepIndex = 1; stepIndex <= visibleSteps; stepIndex++) {
       let step = Math.round((stepIndex / visibleSteps) * distance)
       step = Math.max(previousStep + 1, Math.min(distance, step))
-      path.push(CHARSET[(startIndex + step) % charsetLength])
+      path.push(charset[(startIndex + step) % charsetLength])
       previousStep = step
     }
 
@@ -171,12 +189,12 @@ export class Tile {
   }
 
   _getCharIndex(char) {
-    const index = CHARSET.indexOf(char)
-    return index === -1 ? CHARSET.length - 1 : index
+    const index = this.theme.charset.indexOf(char)
+    return index === -1 ? this.theme.charset.length - 1 : index
   }
 
   _getStepDuration(stepIndex, totalSteps) {
-    const duration = totalSteps > 5 ? FLIP_STEP_FAST_DURATION : FLIP_STEP_DURATION
+    const duration = totalSteps > 5 ? this.theme.flipStepFastDuration : this.theme.flipStepDuration
     const jitter = ((this.row + this.col + stepIndex) % 3) * 10
     return duration + jitter
   }
@@ -202,7 +220,7 @@ export class Tile {
     await this._wait(flipDuration / 2, runId)
     this._setStaticChar(nextChar)
 
-    await this._wait(flipDuration / 2 + FLIP_SETTLE_DURATION, runId)
+    await this._wait(flipDuration / 2 + this.theme.flipSettleDuration, runId)
     this.el.classList.remove('is-flipping')
     this.currentChar = nextChar
     this._setHalfChar(this.topFlapEl, nextChar)

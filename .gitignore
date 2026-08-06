@@ -22,11 +22,6 @@ yarn.lock
 # TypeScript
 *.tsbuildinfo
 
-# Python (removed in the TypeScript migration)
-.venv/
-__pycache__/
-*.pyc
-
 # OS
 .DS_Store
 Thumbs.db

@@ -1,530 +1,175 @@
 # Plugin Development Guide
 
-This document describes how plugins work in FlipOff and how to build new ones that integrate cleanly with the admin UI, runtime refresh loop, and persisted screen system.
+Plugins are server-side screen generators. A plugin declares a manifest describing how the
+admin UI should configure it, fetches or computes data on the server, and renders the result
+as a list of display lines. It can refresh on demand or on a schedule, persist state between
+refreshes, and share settings with other plugins in the same family.
 
-## Overview
+Plugins only exist when the backend is running. The static deployment has no plugin support.
 
-Plugins are server-side screen generators.
+## Where plugins live
 
-A plugin:
-- declares a manifest that tells the admin UI how to configure it
-- fetches or computes data on the server
-- renders output as a list of display lines
-- can refresh on demand or on a schedule
-- can persist plugin-specific runtime state between refreshes
-- can optionally share settings with other plugins in the same family
-
-Plugins are discovered automatically from the `backend/plugins/` package.
-
-## Where Plugins Live
-
-Plugins can be placed anywhere under `backend/plugins/` as long as they are valid Python modules.
-
-Current examples:
-- `backend/plugins/weather/open_meteo_forecast.py`
-- `backend/plugins/github/repo_stats.py`
-- `backend/plugins/github/open_work.py`
-- `backend/plugins/api_ninjas/random_quote.py`
-- `backend/plugins/api_ninjas/quote_of_the_day.py`
-- `backend/plugins/api_ninjas/crypto_prices.py`
-
-You can also create plugin families with shared helpers:
-- `backend/plugins/github/lib/common.py`
-- `backend/plugins/api_ninjas/lib/common.py`
-
-This structure is encouraged. It lets multiple plugins share common API clients, formatting logic, or validation helpers without pushing everything into the top level.
-
-## Discovery Rules
-
-Plugin discovery is implemented in [backend/plugins/__init__.py](backend/plugins/__init__.py).
-
-The loader:
-- recursively scans `backend/plugins/**/*.py`
-- ignores files named `__init__.py`
-- ignores `backend/plugins/base.py`
-- imports each remaining module
-- registers the module-level `PLUGIN` object if present
-
-To be loadable, a module must expose:
-
-```python
-PLUGIN = MyPlugin()
+```
+backend/src/plugins/
+├── base.ts                          Types, manifest serialisation, schema validation
+├── index.ts                         The registry — every plugin is listed here
+├── runtime.ts                       Refresh loops, timeouts, error handling
+├── lib/format.ts                    Shared layout helpers (wrapping, column alignment)
+├── weather/open-meteo-forecast.ts
+├── github/{repo-stats,open-work}.ts + lib/common.ts
+└── api-ninjas/{random-quote,quote-of-the-day,crypto-prices}.ts + lib/common.ts
 ```
 
-If a module has no `PLUGIN` symbol, it is ignored.
+Families with more than one plugin keep shared API clients and formatting in a `lib/common.ts`
+beside them. This is encouraged — it keeps request handling in one place instead of spreading
+it across sibling plugins.
 
-## Runtime Storage
+## Registration
 
-FlipOff keeps runtime data outside the repository:
+There is no filesystem scanning. `index.ts` holds an explicit list:
 
-- `~/.flipoff/config.json`
-  - board settings
-  - shared plugin settings
-- `~/.flipoff/screens.json`
-  - manual screens
-  - plugin screens
-  - cached plugin output
-  - plugin state
-  - last refresh metadata
+```ts
+import { myPlugin } from './my-family/my-plugin'
 
-This means plugin configuration is user-local, not checked into the repo.
-
-## The Plugin Base API
-
-All plugins are built on [backend/plugins/base.py](backend/plugins/base.py).
-
-Core types:
-- `PluginManifest`
-- `PluginField`
-- `PluginFieldOption`
-- `PluginContext`
-- `PluginRefreshResult`
-- `ScreenPlugin`
-
-### `PluginManifest`
-
-Every plugin must provide a manifest.
-
-Required fields:
-- `plugin_id: str`
-- `name: str`
-- `description: str`
-- `default_refresh_interval_seconds: int`
-
-Optional fields:
-- `settings_schema: tuple[PluginField, ...] = ()`
-- `design_schema: tuple[PluginField, ...] = ()`
-- `common_settings_namespace: str = ''`
-- `common_settings_schema: tuple[PluginField, ...] = ()`
-
-Important rules:
-- `plugin_id` must be stable once a plugin is in use, because saved screens reference it.
-- `plugin_id` should be unique across the whole plugin registry.
-- `name` and `description` are shown in the admin UI.
-- `default_refresh_interval_seconds` is used when a new plugin screen is created.
-
-### `PluginField`
-
-`PluginField` describes a single admin form field.
-
-Supported field types:
-- `text`
-- `select`
-- `checkbox`
-- `number`
-
-Field properties:
-- `name`
-- `label`
-- `field_type`
-- `required`
-- `default`
-- `placeholder`
-- `help_text`
-- `options`
-
-`options` is only used for `select` and is made of `PluginFieldOption(label, value)`.
-
-### `PluginContext`
-
-`PluginContext` contains the live display dimensions:
-- `cols`
-- `rows`
-
-Use it when formatting output so your plugin respects the actual board size.
-
-### `PluginRefreshResult`
-
-`refresh()` must return:
-
-```python
-PluginRefreshResult(
-    lines=[...],
-    meta={...},
-)
+const PLUGIN_LIST: ScreenPlugin[] = [
+  // ...
+  myPlugin,
+]
 ```
 
-`lines`:
-- are the rendered lines for the screen
-- are validated by the server against the current board size
+Adding a plugin is one import and one array entry. The registry is keyed by `manifest.id` and
+sorted by it, and a duplicate id throws at startup.
 
-`meta`:
-- is optional
-- is persisted into the screen as `pluginState`
-- is passed back into the next refresh as `previous_state`
+> **`manifest.id` is a persistent identifier.** It is written into `~/.flipoff/screens.json`
+> for every configured screen. Renaming one orphans every screen using it — users get a
+> validation error and have to recreate the screen. Treat ids as frozen once shipped. (The
+> Open-Meteo plugin still carries `weatherbit_forecast` from an earlier implementation for
+> exactly this reason.)
 
-Use `meta` for lightweight persisted runtime state such as:
-- last successful payload data
-- cache keys
-- a quote-of-the-day date stamp
-- a selected item that should remain stable until the next day or refresh window
+## Writing a plugin
 
-## The `ScreenPlugin` Contract
+A plugin is a plain object satisfying `ScreenPlugin`:
 
-Plugins subclass `ScreenPlugin` and implement:
+```ts
+import type { PluginRefreshArgs, PluginRefreshResult, ScreenPlugin } from '../base'
+import { withOptionalTitle } from '../base'
+import { fetchJson, fit } from '../lib/format'
 
-```python
-async def refresh(
-    self,
-    *,
-    settings: dict[str, Any],
-    design: dict[str, Any],
-    context: PluginContext,
-    http_session: ClientSession,
-    previous_state: dict[str, Any] | None = None,
-    common_settings: dict[str, Any] | None = None,
-) -> PluginRefreshResult:
-    ...
-```
-
-Arguments:
-- `settings`
-  - the per-screen settings from `settings_schema`
-- `design`
-  - the per-screen design values from `design_schema`
-- `context`
-  - current board dimensions
-- `http_session`
-  - a shared `aiohttp.ClientSession` created by the server
-- `previous_state`
-  - the previously persisted `meta` value for this screen
-- `common_settings`
-  - shared settings for a plugin family, if configured
-
-Plugins may also override:
-
-```python
-def placeholder_lines(
-    self,
-    *,
-    settings: dict[str, Any],
-    design: dict[str, Any],
-    context: PluginContext,
-    error: str | None = None,
-) -> list[str]:
-    ...
-```
-
-This is used before the first successful refresh, or when cached output is absent.
-
-## Title Behavior
-
-The base class provides two helpers:
-- `get_title_line(...)`
-- `with_optional_title(...)`
-
-Current system behavior:
-- if `design["title"]` is blank, no title line is rendered
-- if `design["title"]` is present, the plugin output becomes:
-  1. title line
-  2. blank spacer line
-  3. content lines
-
-If your plugin offers a `Title Override`, it should usually call `with_optional_title(...)` instead of manually prepending the title.
-
-## Line Formatting Rules
-
-Plugin output is validated by the server before it is used.
-
-That means:
-- each line must be a string
-- each line must fit inside `context.cols`
-- total line count must fit inside `context.rows`
-
-Best practice:
-- always format against `context.cols` and `context.rows`
-- do not assume the default board size is always `18x5`
-- trim, wrap, or abbreviate content yourself before returning it
-
-The server will reject invalid output if it exceeds the display size.
-
-## Shared Plugin Settings
-
-Some plugins need a setting that should be reused across several related plugins.
-
-Example:
-- the API Ninjas plugins share one API key
-
-This is handled with:
-- `common_settings_namespace`
-- `common_settings_schema`
-
-How it works:
-- all plugins with the same namespace share the same stored values
-- those values are edited from the plugin modal
-- they are persisted in `~/.flipoff/config.json` under `pluginCommonSettings`
-- they are passed into `refresh()` as `common_settings`
-
-Example from the API Ninjas plugins:
-
-```python
-manifest = PluginManifest(
-    plugin_id='api_ninjas_random_quote',
-    name='Random Quote',
-    description='Show a random quote from API Ninjas.',
-    default_refresh_interval_seconds=3600,
-    common_settings_namespace='quotes',
-    common_settings_schema=(
-        PluginField(
-            name='apiNinjasApiKey',
-            label='API Ninjas API Key',
-            field_type='text',
-            default='',
-        ),
-    ),
-)
-```
-
-Use shared settings when:
-- multiple plugins talk to the same external service
-- a token should only be entered once per user
-- the value is not specific to one individual screen instance
-
-Do not use shared settings for values that differ screen by screen.
-
-## Per-Screen Settings vs Design
-
-Keep a clean split:
-
-Use `settings_schema` for:
-- repository names
-- city/country
-- ticker symbols
-- API parameters
-- screen-specific behavior
-
-Use `design_schema` for:
-- `title`
-- visual toggles such as `showConditions`
-- other display-only presentation choices
-
-This distinction matters because the admin UI treats them as separate sections and the server validates them independently.
-
-## Screen Persistence Model
-
-Plugin-backed screens are saved in `~/.flipoff/screens.json` with fields like:
-
-```json
-{
-  "id": "abc123",
-  "type": "plugin",
-  "name": "",
-  "enabled": true,
-  "pluginId": "github_repo_stats",
-  "refreshIntervalSeconds": 300,
-  "settings": {
-    "repository": "magnum6actual/flipoff"
+export const myPlugin: ScreenPlugin = {
+  manifest: {
+    id: 'my_plugin',
+    name: 'My Plugin',
+    description: 'Shown in the admin plugin picker.',
+    defaultRefreshIntervalSeconds: 300,
+    settingsSchema: [{ name: 'city', label: 'City', type: 'text', required: true, placeholder: 'London' }],
+    designSchema: [{ name: 'title', label: 'Title Override', type: 'text', default: '' }],
   },
-  "design": {
-    "title": ""
+
+  async refresh({ settings, design, context, signal }: PluginRefreshArgs): Promise<PluginRefreshResult> {
+    const url = `https://example.com/api?q=${encodeURIComponent(String(settings.city))}`
+    const { ok, payload } = await fetchJson(url, { signal })
+    if (!ok) throw new Error('Upstream request failed.')
+
+    const lines = withOptionalTitle([fit(String((payload as Record<string, unknown>).value), context.cols)], design, context)
+    return { lines: lines.slice(0, context.rows) }
   },
-  "pluginState": {},
-  "cachedLines": [],
-  "lastRefreshedAt": null,
-  "lastError": null
 }
 ```
 
-Meaning:
-- `settings`
-  - validated from your `settings_schema`
-- `design`
-  - validated from your `design_schema`
-- `pluginState`
-  - your last `PluginRefreshResult.meta`
-- `cachedLines`
-  - your last successful rendered output
-- `lastRefreshedAt`
-  - timestamp of last successful refresh
-- `lastError`
-  - last refresh error string, if any
+### `refresh(args)`
 
-## Refresh Lifecycle
+| Argument         | What it is                                                        |
+| ---------------- | ----------------------------------------------------------------- |
+| `settings`       | Per-screen values, already validated against `settingsSchema`     |
+| `design`         | Per-screen presentation values, validated against `designSchema`  |
+| `context`        | `{ cols, rows }` for the board this screen belongs to             |
+| `previousState`  | Whatever the last successful refresh returned as `meta`           |
+| `commonSettings` | The family's shared settings, if `commonSettingsNamespace` is set |
+| `signal`         | An `AbortSignal` with a 20s deadline covering the whole refresh   |
 
-Plugin screens refresh in three ways:
+Return `{ lines, meta? }`. `lines` must fit the board — at most `context.rows` entries, each at
+most `context.cols` **code points**. `meta` is persisted and handed back as `previousState`
+next time; the Quote of the Day plugin uses it to serve one quote per UTC day.
 
-1. On server startup
-- the server creates a shared HTTP session
-- all enabled plugin screens are refreshed
+Pass `signal` to every `fetch` you make. Without it a hung upstream stalls the refresh loop.
 
-2. On schedule
-- each enabled plugin screen runs a background loop based on `refreshIntervalSeconds`
+Throwing is the correct way to report failure. The runtime catches it, records the message as
+`lastError`, keeps the previously cached lines on screen, and surfaces the error in the admin
+dashboard.
 
-3. Manually from admin
-- the admin UI can call a refresh endpoint for a single plugin screen
+### `placeholderLines(args)` (optional)
 
-The relevant admin endpoint is:
-- `POST /api/admin/screens/{screen_id}/refresh`
+Rendered when a screen has no cached output yet, or has only ever failed. Receives `error`.
+Omit it and `defaultPlaceholderLines` shows `NO DATA` or the error text.
 
-## Error Handling
+## Schema fields
 
-If a refresh raises an exception:
-- `lastError` is updated on the screen
-- the previous cached lines remain in place unless there were none
-- placeholder content may be shown if no cached lines exist
+`settingsSchema`, `designSchema` and `commonSettingsSchema` drive the admin forms and are
+validated server-side before a screen is saved. Field types:
 
-Write errors for operators, not for developers only.
+| Type       | Validation                                        |
+| ---------- | ------------------------------------------------- |
+| `text`     | String, trimmed. `required: true` rejects empty   |
+| `select`   | Must match one of `options[].value`               |
+| `checkbox` | Must be a boolean                                 |
+| `number`   | Must be numeric                                   |
 
-Good:
-- `Open-Meteo could not find that city/country combination.`
-- `API_NINJAS_API_KEY is not configured on the server.`
+Every field supports `label`, `default`, `placeholder` and `helpText`. Unknown keys in a saved
+payload are dropped — the schema is the whole contract.
 
-Bad:
-- generic tracebacks
-- unclear one-word errors
+### Shared family settings
 
-## Recommended Authoring Pattern
+Set `commonSettingsNamespace` and `commonSettingsSchema` when several plugins need one value,
+like an API key. The first plugin registering a namespace defines its schema; values are stored
+once in `~/.flipoff/config.json` under `pluginCommonSettings` and passed to every plugin in the
+family as `commonSettings`.
 
-Use this structure:
+## Board text rules
 
-1. Put family-wide helpers in `backend/plugins/<family>/lib/common.py`
-2. Put one plugin per file
-3. Expose one `PLUGIN = ...` object per plugin module
-4. Keep manifest declarations near the top of the file
-5. Keep request/formatting helpers as private methods
-6. Return only screen-sized, board-ready lines
+The board renders one tile per code point, and lines are uppercased and clipped to
+`context.cols`.
 
-## Minimal Example
+**Count code points, not UTF-16 units.** `'🏛️'.length` is 3 in JavaScript but occupies one
+tile. Use `cpLength` / `cpSlice` from `util/text.ts`, or the helpers in `lib/format.ts`, which
+already do:
 
-```python
-from __future__ import annotations
+- `fit(value, cols)` — clip to width
+- `wrapText(value, cols, maxLines)` — word wrap, hard-splitting over-long words
+- `formatAlignedPairs(rows, cols)` — two-column label/value layout that degrades gracefully
 
-from ..base import PluginContext, PluginField, PluginManifest, PluginRefreshResult, ScreenPlugin
+Plain `.slice()` will cut an emoji in half and render garbage.
 
+## Runtime storage
 
-class HelloPlugin(ScreenPlugin):
-    manifest = PluginManifest(
-        plugin_id='hello_plugin',
-        name='Hello Plugin',
-        description='Example plugin for development.',
-        default_refresh_interval_seconds=300,
-        settings_schema=(
-            PluginField(
-                name='message',
-                label='Message',
-                field_type='text',
-                default='HELLO WORLD',
-                required=True,
-            ),
-        ),
-        design_schema=(
-            PluginField(
-                name='title',
-                label='Title Override',
-                field_type='text',
-                default='',
-            ),
-        ),
-    )
+Runtime data lives outside the repository, in `~/.flipoff` (override with `FLIPOFF_DATA_DIR`):
 
-    async def refresh(
-        self,
-        *,
-        settings,
-        design,
-        context: PluginContext,
-        http_session,
-        previous_state=None,
-        common_settings=None,
-    ) -> PluginRefreshResult:
-        message = str(settings.get('message') or 'HELLO WORLD').strip().upper()
-        lines = self.with_optional_title(
-            [message[: context.cols]],
-            design=design,
-            context=context,
-        )
-        return PluginRefreshResult(lines=lines[: context.rows])
+- **`config.json`** — board settings, shared plugin settings, admin password hash
+- **`screens.json`** — manual screens, plugin screens, cached plugin output, plugin state, last
+  refresh metadata
 
+Plugin configuration is user-local and never checked in.
 
-PLUGIN = HelloPlugin()
-```
+## Refresh behaviour
 
-## Example With Shared Settings
+Each enabled plugin screen gets a self-rescheduling timer at its `refreshIntervalSeconds`
+(chained timeouts, so a slow refresh cannot overlap itself). Screens also refresh on startup,
+when a board's settings change, when screens are saved, and on demand from the admin dashboard.
 
-```python
-from __future__ import annotations
+Resizing a board discards cached plugin output rather than re-wrapping it — lines rendered for
+the old width would be ragged at the new one, and the next refresh regenerates them.
 
-import os
-
-from ..base import PluginField, PluginManifest, PluginRefreshResult, ScreenPlugin
-
-
-class ExampleApiPlugin(ScreenPlugin):
-    manifest = PluginManifest(
-        plugin_id='example_api_plugin',
-        name='Example API Plugin',
-        description='Uses a shared API key.',
-        default_refresh_interval_seconds=300,
-        common_settings_namespace='example_service',
-        common_settings_schema=(
-            PluginField(
-                name='apiKey',
-                label='API Key',
-                field_type='text',
-                default='',
-            ),
-        ),
-    )
-
-    async def refresh(self, *, settings, design, context, http_session, previous_state=None, common_settings=None):
-        api_key = (common_settings or {}).get('apiKey') or os.environ.get('EXAMPLE_API_KEY')
-        if not api_key:
-            raise ValueError('No API key configured.')
-        return PluginRefreshResult(lines=['READY'])
-
-
-PLUGIN = ExampleApiPlugin()
-```
-
-## Validation and Testing
-
-At minimum, test:
-- plugin discovery works
-- the plugin compiles
-- the plugin renders valid output for the current board size
-- the plugin handles missing config cleanly
-- the plugin handles API failure cleanly
-- any symbol or parameter normalization logic
-- placeholder behavior
-
-Useful commands:
+## Testing a plugin
 
 ```bash
-python3 -m py_compile backend/plugins/<family>/<plugin>.py
-python3 -m unittest discover -s tests -v
+pnpm -C backend build
 ```
 
-If your plugin adds parsing or formatting logic, add targeted unit tests under `backend/tests/`.
+must be tsc-clean under `strict`. Then run the backend and add a screen using your plugin from
+the admin dashboard, or refresh it directly:
 
-Existing examples:
-- [backend/tests/test_server.py](backend/tests/test_server.py)
-- [backend/tests/test_api_ninjas_crypto_prices.py](backend/tests/test_api_ninjas_crypto_prices.py)
-- [backend/tests/test_api_ninjas_quotes.py](backend/tests/test_api_ninjas_quotes.py)
+```bash
+curl -X POST "http://localhost:8080/api/admin/screens/<screenId>/refresh" -b cookies.txt
+```
 
-## Practical Guidelines
-
-- Keep `plugin_id` stable once published.
-- Keep output concise and deterministic.
-- Respect `context.cols` and `context.rows`.
-- Prefer shared helper modules for external API families.
-- Use `previous_state` only for small, screen-specific state.
-- Use `common_settings` only for values shared across multiple plugins.
-- Make refresh errors readable in the admin UI.
-- Avoid extra dependencies if `aiohttp` and the standard library are enough.
-- Do not rely on frontend code for plugin rendering. Plugins render on the server.
-
-## Current Built-In Plugin Families
-
-Weather:
-- `backend/plugins/weather/open_meteo_forecast.py`
-
-GitHub:
-- `backend/plugins/github/repo_stats.py`
-- `backend/plugins/github/open_work.py`
-
-API Ninjas:
-- `backend/plugins/api_ninjas/random_quote.py`
-- `backend/plugins/api_ninjas/quote_of_the_day.py`
-- `backend/plugins/api_ninjas/crypto_prices.py`
-
-These are the best references when creating a new plugin.
+The response includes `previewLines` and `lastError`, which is the fastest way to see what your
+plugin actually rendered.

@@ -3,41 +3,7 @@ import { cpLength, cpSlice } from '../../util/text'
 import type { PluginPlaceholderArgs, PluginRefreshArgs, PluginRefreshResult, ScreenPlugin } from '../base'
 import { withOptionalTitle } from '../base'
 import { fetchJson, fit } from '../lib/format'
-
-const OPEN_METEO_FORECAST_URL = 'https://api.open-meteo.com/v1/forecast'
-const OPEN_METEO_GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search'
-
-/** WMO weather codes, abbreviated to fit a split-flap column. */
-const WEATHER_CODE_LABELS: Record<number, string> = {
-  0: 'CLEAR',
-  1: 'MAINLYCLEAR',
-  2: 'PARTLYCLOUDY',
-  3: 'OVERCAST',
-  45: 'FOG',
-  48: 'RIMEFOG',
-  51: 'LIGHTDRIZZLE',
-  53: 'DRIZZLE',
-  55: 'HEAVYDRIZZLE',
-  56: 'FREEZEDRIZZLE',
-  57: 'DENSEFRZDRIZ',
-  61: 'LIGHTRAIN',
-  63: 'RAIN',
-  65: 'HEAVYRAIN',
-  66: 'FREEZERAIN',
-  67: 'HEAVYFRZRAIN',
-  71: 'LIGHTSNOW',
-  73: 'SNOW',
-  75: 'HEAVYSNOW',
-  77: 'SNOWGRAINS',
-  80: 'RAINSHOWERS',
-  81: 'HVRYSHOWERS',
-  82: 'VIOLENTRAIN',
-  85: 'SNOWSHOWERS',
-  86: 'HVYSNWSHOWR',
-  95: 'TSTORM',
-  96: 'TSTRMHAIL',
-  99: 'HVYHAIL',
-}
+import { OPEN_METEO_FORECAST_URL, WEATHER_CODE_LABELS, formatTemperature, geocode, reasonFrom, temperatureUnitFor } from './lib/open-meteo'
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
@@ -60,19 +26,6 @@ function weekdayLabel(validDate: string): string {
     if (!Number.isNaN(date.getTime())) return WEEKDAYS[date.getUTCDay()]!
   }
   return validDate.slice(0, 3).toUpperCase() || 'DAY'
-}
-
-function formatTemperature(value: unknown): string {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? String(Math.round(parsed)) : '--'
-}
-
-function reasonFrom(payload: unknown, fallback: string): string {
-  if (typeof payload === 'object' && payload !== null && 'reason' in payload) {
-    const reason = (payload as Record<string, unknown>).reason
-    if (typeof reason === 'string' && reason) return reason
-  }
-  return fallback
 }
 
 /**
@@ -143,24 +96,12 @@ export const openMeteoForecastPlugin: ScreenPlugin = {
         .trim()
         .toUpperCase() || 'M'
 
-    if (!city) throw new ValidationError('Open-Meteo city is required.')
-    if (!country) throw new ValidationError('Open-Meteo country code is required.')
-
-    const geocodingUrl = `${OPEN_METEO_GEOCODING_URL}?name=${encodeURIComponent(city)}&count=1&language=en&countryCode=${encodeURIComponent(country)}`
-    const geocoding = await fetchJson(geocodingUrl, { signal })
-    if (!geocoding.ok) throw new ValidationError(reasonFrom(geocoding.payload, 'Open-Meteo geocoding request failed.'))
-
-    const geocodingPayload = geocoding.payload as Record<string, unknown> | null
-    const results = geocodingPayload?.results
-    if (!Array.isArray(results) || results.length === 0) throw new ValidationError('Open-Meteo could not find that city/country combination.')
-
-    const location = results[0] as Record<string, unknown>
-    const temperatureUnit = units === 'I' ? 'fahrenheit' : 'celsius'
-    const timezone = String(location.timezone || 'auto')
+    const location = await geocode(city, country, signal)
+    const { apiValue: temperatureUnit, symbol: unitSymbol } = temperatureUnitFor(units)
 
     const forecastUrl =
-      `${OPEN_METEO_FORECAST_URL}?latitude=${encodeURIComponent(String(location.latitude))}&longitude=${encodeURIComponent(String(location.longitude))}` +
-      `&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=3&temperature_unit=${temperatureUnit}&timezone=${encodeURIComponent(timezone)}`
+      `${OPEN_METEO_FORECAST_URL}?latitude=${encodeURIComponent(location.latitude)}&longitude=${encodeURIComponent(location.longitude)}` +
+      `&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=3&temperature_unit=${temperatureUnit}&timezone=${encodeURIComponent(location.timezone)}`
     const forecast = await fetchJson(forecastUrl, { signal })
     if (!forecast.ok) throw new ValidationError(reasonFrom(forecast.payload, 'Open-Meteo forecast request failed.'))
 
@@ -174,7 +115,6 @@ export const openMeteoForecastPlugin: ScreenPlugin = {
     const minTemps = requireSeries(series.temperature_2m_min)
     const weatherCodes = requireSeries(series.weather_code)
 
-    const unitSymbol = units === 'I' ? 'F' : 'C'
     const rows: ForecastRow[] = [0, 1, 2].map((index) => [
       weekdayLabel(String(dates[index] ?? '')),
       `${formatTemperature(minTemps[index])}/${formatTemperature(maxTemps[index])}${unitSymbol}`,
@@ -186,7 +126,7 @@ export const openMeteoForecastPlugin: ScreenPlugin = {
 
     return {
       lines: lines.slice(0, context.rows),
-      meta: { city: location.name || city, country: location.country_code || country },
+      meta: { city: location.name, country: location.countryCode },
     }
   },
 

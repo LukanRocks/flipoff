@@ -25,6 +25,13 @@
         align-items: center;
         justify-content: center;
       }
+      .boot-status {
+        color: #666;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
       .board {
         border-radius: 0 !important;
         width: 100% !important;
@@ -37,7 +44,10 @@
     </style>
   </head>
   <body>
-    <section id="board-container"></section>
+    <section id="board-container">
+      <!-- Shown until /api/config answers; main.js removes it once the board mounts. -->
+      <p class="boot-status" id="boot-status">Connecting to server…</p>
+    </section>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

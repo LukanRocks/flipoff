@@ -24,6 +24,12 @@ export interface PluginManifest {
   name: string
   description: string
   defaultRefreshIntervalSeconds: number
+  /**
+   * Output is derived rather than fetched, so there is nothing worth keeping on
+   * disk. The refresh loop skips its `saveScreens` write for these -- without it
+   * a clock on a 30s interval rewrites screens.json ~2,900 times a day.
+   */
+  volatile?: boolean
   settingsSchema?: PluginField[]
   designSchema?: PluginField[]
   /** Settings shared by a whole plugin family, e.g. one API key for all API Ninjas plugins. */

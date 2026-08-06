@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 import { DEFAULT_BOARD_SLUG, DEFAULT_MESSAGES } from '../config/defaults'
-import { normalizeSchemaValues, placeholderLinesFor, type PluginRegistry } from '../plugins/base'
+import { normalizeSchemaValues, placeholderLinesFor, type PluginField, type PluginRegistry } from '../plugins/base'
 import type { BoardState, DisplayConfig, PluginScreen, Screen } from '../types'
 import { dumpJson } from '../util/text'
 import {
@@ -35,6 +35,64 @@ export function buildManualScreensFromMessages(messages: unknown, cols: number, 
     enabled: true,
     lines: trimMessageLines(message),
   }))
+}
+
+/** Seeded plugin screens carry this prefix so they stay recognisable as untouched defaults. */
+export const SEEDED_PLUGIN_ID_PREFIX = 'plugin-'
+
+/**
+ * True when a seeded plugin screen still holds nothing but its schema defaults.
+ *
+ * A seeded id alone is not enough to call a screen untouched. Someone who sets
+ * the clock's time zone and changes nothing else would otherwise have that
+ * setting silently rebuilt away on the next restart -- far more surprising than
+ * losing an edit to the demo quotes, which is the behaviour this predicate was
+ * originally written for.
+ */
+export function hasDefaultPluginConfig(screen: Record<string, unknown>, plugins: PluginRegistry): boolean {
+  const plugin = typeof screen.pluginId === 'string' ? plugins.get(screen.pluginId) : undefined
+  if (!plugin) return false
+
+  if (screen.refreshIntervalSeconds !== undefined && screen.refreshIntervalSeconds !== plugin.manifest.defaultRefreshIntervalSeconds) return false
+
+  try {
+    const matches = (values: unknown, schema: PluginField[] | undefined, section: string) =>
+      dumpJson(normalizeSchemaValues(values, schema, section)) === dumpJson(normalizeSchemaValues({}, schema, section))
+    return matches(screen.settings, plugin.manifest.settingsSchema, 'settings') && matches(screen.design, plugin.manifest.designSchema, 'design')
+  } catch {
+    // Unparseable values are someone's data, however broken -- keep them.
+    return false
+  }
+}
+
+/**
+ * A board nobody has configured yet: the static messages from config.json plus
+ * a clock, which used to be a `{"dynamic": "datetime"}` marker the browser
+ * rendered on its own.
+ */
+export function buildDefaultScreens(cols: number, rows: number, plugins: PluginRegistry): Screen[] {
+  const screens = buildManualScreensFromMessages(null, cols, rows)
+
+  const clock = plugins.get('datetime')
+  if (!clock) return screens
+
+  screens.push({
+    id: `${SEEDED_PLUGIN_ID_PREFIX}datetime`,
+    slug: 'clock',
+    type: 'plugin',
+    name: 'Clock',
+    enabled: true,
+    pluginId: clock.manifest.id,
+    refreshIntervalSeconds: clock.manifest.defaultRefreshIntervalSeconds,
+    settings: normalizeSchemaValues({}, clock.manifest.settingsSchema, 'clock.settings'),
+    design: normalizeSchemaValues({}, clock.manifest.designSchema, 'clock.design'),
+    pluginState: {},
+    cachedLines: [],
+    lastRefreshedAt: null,
+    lastError: null,
+  })
+
+  return screens
 }
 
 /** Raw per-board screen arrays as they sit on disk, before validation. */

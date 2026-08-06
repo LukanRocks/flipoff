@@ -62,7 +62,9 @@ export function createPluginRuntime(state: AppState, plugins: PluginRegistry, br
       clearTimeout(timeout)
     }
 
-    saveScreens(state.screensPath, state.registry.boards)
+    // A volatile plugin regenerates its lines from scratch every tick, so
+    // persisting them buys nothing and would churn the file continuously.
+    if (!plugin.manifest.volatile) saveScreens(state.screensPath, state.registry.boards)
     syncBoardDisplayMessages(board, plugins)
 
     if (broadcast && (screen.lastError !== previousLastError || !sameLines(screen.cachedLines ?? [], previousCachedLines))) {

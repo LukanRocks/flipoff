@@ -15,8 +15,7 @@
           <span class="config-indicator" id="config-indicator"></span>
         </div>
         <nav class="header-nav">
-          <a href="control.html" target="flipoff-control" class="control-panel-btn">Control Panel</a>
-          <a href="/admin" class="control-panel-btn admin-btn" id="admin-btn" style="display: none">Admin</a>
+          <a href="/admin" class="header-btn admin-btn" id="admin-btn">Admin</a>
           <button class="fullscreen-btn" id="fullscreen-btn" aria-label="Toggle fullscreen">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="15 3 21 3 21 9"></polyline>
@@ -37,7 +36,10 @@
       </header>
 
       <!-- Board -->
-      <main class="board-section" id="board-container" role="status" aria-live="polite" aria-label="Split-flap message display"></main>
+      <main class="board-section" id="board-container" role="status" aria-live="polite" aria-label="Split-flap message display">
+        <!-- Shown until /api/config answers; main.js removes it once the board mounts. -->
+        <p class="boot-status" id="boot-status">Connecting to server…</p>
+      </main>
 
       <!-- Countdown bar (hidden in fullscreen) -->
       <div class="countdown-bar" id="countdown-bar" role="progressbar" aria-label="Time until next message">

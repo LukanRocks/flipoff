@@ -2,7 +2,7 @@ import type { PluginRegistry } from '../plugins/base'
 import { serializeManifest } from '../plugins/base'
 import type { BoardRegistry, BoardState, DisplayConfig, MessageState, Screen } from '../types'
 import { serializeSettings } from './config'
-import { buildManualScreensFromMessages, normalizeScreensPayload, resolveScreenLines, syncBoardDisplayMessages } from './screens'
+import { SEEDED_PLUGIN_ID_PREFIX, buildDefaultScreens, hasDefaultPluginConfig, normalizeScreensPayload, resolveScreenLines, syncBoardDisplayMessages } from './screens'
 
 export function emptyMessageState(rows: number): MessageState {
   return { hasOverride: false, lines: Array(rows).fill(''), updatedAt: null }
@@ -11,7 +11,7 @@ export function emptyMessageState(rows: number): MessageState {
 export function buildDefaultBoardState(config: DisplayConfig, plugins: PluginRegistry): BoardState {
   const board: BoardState = {
     config,
-    screens: buildManualScreensFromMessages(null, config.cols, config.rows),
+    screens: buildDefaultScreens(config.cols, config.rows, plugins),
     messageState: emptyMessageState(config.rows),
     refreshLoops: new Map(),
     overrideTimer: null,
@@ -20,12 +20,23 @@ export function buildDefaultBoardState(config: DisplayConfig, plugins: PluginReg
   return board
 }
 
-/** True when every persisted screen is still an untouched auto-generated one. */
-function areOnlyDefaultManualScreens(rawScreens: unknown[]): boolean {
-  return rawScreens.every((screen) => {
-    if (typeof screen !== 'object' || screen === null) return false
-    const candidate = screen as Record<string, unknown>
-    return candidate.type === 'manual' && String(candidate.id ?? '').startsWith('manual-')
+/**
+ * True when every persisted screen is still an untouched auto-generated one,
+ * which is what lets a config.json message edit take effect on restart.
+ *
+ * Seeded plugin screens have to count, or a board saved once after the clock
+ * was seeded would never pick up a config.json edit again. But a seeded id
+ * alone is not proof: the screen also has to still hold its schema defaults.
+ */
+function areOnlySeededScreens(rawScreens: unknown[], plugins: PluginRegistry): boolean {
+  return rawScreens.every((rawScreen) => {
+    if (typeof rawScreen !== 'object' || rawScreen === null) return false
+    const screen = rawScreen as Record<string, unknown>
+    const id = String(screen.id ?? '')
+
+    if (id.startsWith('manual-')) return true
+    if (id.startsWith(SEEDED_PLUGIN_ID_PREFIX)) return hasDefaultPluginConfig(screen, plugins)
+    return false
   })
 }
 
@@ -45,7 +56,7 @@ export function buildRegistry(options: {
     // Default manual screens are rebuilt from config.json on every start, so
     // editing messages there takes effect on restart without clearing state.
     // Anything the admin has actually customised is preserved instead.
-    if (rawScreens === undefined || areOnlyDefaultManualScreens(rawScreens)) {
+    if (rawScreens === undefined || areOnlySeededScreens(rawScreens, plugins)) {
       registry.boards.set(config.slug, buildDefaultBoardState(config, plugins))
       continue
     }

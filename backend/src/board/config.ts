@@ -2,19 +2,27 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 import {
+  DEFAULT_ACCENT_COLORS,
   DEFAULT_API_MESSAGE_DURATION_SECONDS,
   DEFAULT_BOARD_NAME,
   DEFAULT_BOARD_SLUG,
+  DEFAULT_CHARSET,
   DEFAULT_COLS,
   DEFAULT_MESSAGES,
   DEFAULT_MESSAGE_DURATION_SECONDS,
   DEFAULT_ROWS,
+  DEFAULT_TIMING,
 } from '../config/defaults'
 import type { BoardRegistry, DisplayConfig } from '../types'
 import { dumpJson } from '../util/text'
 import { ValidationError, coerceOptionalString, coerceSlug, makeUniqueSlug, normalizeRuntimeSettingsPayload, suggestSlug } from './normalize'
 
-/** The public `/api/config` shape the display client consumes. */
+/**
+ * The public `/api/config` shape, and the payload of every `config_state`
+ * WebSocket frame. This is the display's only source of configuration -- the
+ * board geometry and messages are per-board, the charset, colours and timing
+ * are app-global and come straight from config.json.
+ */
 export function serializeConfig(config: DisplayConfig): Record<string, unknown> {
   return {
     boardSlug: config.slug,
@@ -24,6 +32,9 @@ export function serializeConfig(config: DisplayConfig): Record<string, unknown> 
     defaultMessages: config.defaultMessages.map((message) => [...message]),
     messageDurationSeconds: config.messageDurationSeconds,
     apiMessageDurationSeconds: config.apiMessageDurationSeconds,
+    charset: DEFAULT_CHARSET,
+    accentColors: [...DEFAULT_ACCENT_COLORS],
+    timing: { ...DEFAULT_TIMING },
   }
 }
 

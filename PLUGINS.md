@@ -15,7 +15,8 @@ backend/src/plugins/
 ├── index.ts                         The registry — every plugin is listed here
 ├── runtime.ts                       Refresh loops, timeouts, error handling
 ├── lib/format.ts                    Shared layout helpers (wrapping, column alignment)
-├── weather/open-meteo-forecast.ts
+├── datetime/clock.ts
+├── weather/{open-meteo-current,open-meteo-forecast}.ts + lib/open-meteo.ts
 ├── github/{repo-stats,open-work}.ts + lib/common.ts
 └── api-ninjas/{random-quote,quote-of-the-day,crypto-prices}.ts + lib/common.ts
 ```
@@ -157,6 +158,17 @@ when a board's settings change, when screens are saved, and on demand from the a
 
 Resizing a board discards cached plugin output rather than re-wrapping it — lines rendered for
 the old width would be ragged at the new one, and the next refresh regenerates them.
+
+A refresh whose output changed broadcasts a `config_state` frame to every connected display,
+which swaps the rotation in place without reloading the page.
+
+### `volatile`
+
+Set `volatile: true` in the manifest when a plugin derives its lines rather than fetching
+them — the clock is the example. The refresh loop then skips writing `screens.json` after
+each tick, because there is nothing worth persisting and a short interval would otherwise
+rewrite that file continuously. Anything that makes a network request should leave it off,
+so its last good output survives a restart.
 
 ## Testing a plugin
 

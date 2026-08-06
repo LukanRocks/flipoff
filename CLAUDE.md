@@ -6,22 +6,49 @@ A split-flap (airport flip-board) display that runs in a browser. Fork of
 
 ## Stack
 
-pnpm workspace: `web/` (frontend) + `backend/` (server). Prettier at root, no semicolons,
-single quotes, 180 print width.
+pnpm workspace: `board/` (the display) + `admin/` (the dashboard) + `backend/` (the
+server). Prettier at root, no semicolons, single quotes, 180 print width.
 
-- **`web/`** — vanilla ES modules under Vite. **No React, no Tailwind, no component
-  framework.** The split-flap animation is hand-tuned DOM + CSS; keep it that way.
+- **`board/`** — vanilla ES modules under Vite. **No React, no Tailwind, no component
+  framework.** The split-flap animation is hand-tuned DOM + CSS; keep it that way. This
+  rule is about this package specifically, not the repo.
+- **`admin/`** — the admin dashboard, a separate Vite build. Different rules: it is an
+  ordinary form-and-table app and is free to use a framework.
 - **`backend/`** — Express + `ws`, state persisted as JSON files in `~/.flipoff`.
 
-The backend serves `web/dist` (or `backend/public` in a container), not raw source — run
-`pnpm -C web build` at least once or it has nothing to serve.
+The backend serves `board/dist` and `admin/dist` (or `backend/public/{board,admin}` in a
+container), not raw source — build both at least once or it has nothing to serve.
 
 TypeScript 6 no longer loads `@types/*` into global scope automatically. `backend/tsconfig.json`
 names them in `types: ["node"]`; dropping that breaks every `process` and `__dirname`.
 
-## The frontend requires the backend — there is no static mode
+## The two frontends share nothing, deliberately
 
-`web/dist` is not deployable on its own. The display gets **everything** from the server:
+Not one line of JavaScript is imported by both. The only duplicated file is `reset.css`,
+which each package keeps its own copy of — and `admin.css` re-declares `box-sizing`, `body`
+and the form-control font on top of it anyway. Do not "fix" that into a shared package: it
+is 39 lines, and the whole point of the split is that these two applications have opposite
+constraints and should not be able to reach into each other.
+
+They meet only at the HTTP boundary — `/api` and `/ws`, contracts frozen below.
+
+## Why the admin's Vite `base` is absolute and the board's is not
+
+Both builds emit `dist/assets`, so they can share an origin only by not sharing a URL
+prefix. `admin/vite.config.ts` sets `base: '/admin/'`, and `app.ts` mounts the two builds
+at `/assets` and `/admin/assets`.
+
+The board cannot do the same. It is served at `/`, `/display.html` **and** `/{boardSlug}` —
+one path segment deep — so it needs `base: './'` for its asset URLs to land on `/assets`
+from every one of them. That is also why `routes/pages.ts` uses a `strict` router and
+redirects trailing slashes: `/{slug}/` would resolve `./assets` one level too deep.
+
+`noCacheStaticAssets` matches `/admin` by prefix rather than by listing paths, so
+client-side admin routes stay uncacheable without anyone having to remember to add them.
+
+## The board requires the backend — there is no static mode
+
+`board/dist` is not deployable on its own. The display gets **everything** from the server:
 grid, charset, accent colours, animation timing and the whole rotation all arrive in one
 `/api/config` response, and live updates come over `/ws`.
 
@@ -30,8 +57,8 @@ There is deliberately no local fallback for **content**. If you find yourself ad
 architecture removed — a board showing built-in defaults hides an outage instead of
 showing it.
 
-The corollary is that `pnpm -C web dev` alone renders nothing useful. Run `pnpm dev` from
-the root so the backend comes up alongside Vite.
+The corollary is that `pnpm -C board dev` alone renders nothing useful. Run `pnpm dev` from
+the root so the backend comes up alongside both Vite servers.
 
 ## The board reports its own connection state
 
@@ -122,7 +149,7 @@ lines. Two things bite here:
 
 ## API and WebSocket contracts are frozen
 
-`web/src/admin.js` (1,700+ lines) and `web/src/RemoteMessageSync.js` are hand-written
+`admin/src/admin.js` (1,700+ lines) and `board/src/RemoteMessageSync.js` are hand-written
 against the existing routes and the `/ws` event shape (`{type, payload}` with
 `message_state` / `config_state`). Server changes must preserve those paths and payloads
 unless you are also updating both clients.

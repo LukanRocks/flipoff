@@ -2,7 +2,7 @@
 
 **Turn any TV into a retro split-flap display.** The classic flip-board look, without the $3,500 hardware. And it's free.
 
-![FlipOff Screenshot](web/public/images/screenshot.png)
+![FlipOff Screenshot](board/public/images/screenshot.png)
 
 ## What is this?
 
@@ -31,7 +31,7 @@ No accounts. No subscriptions. No $199 fee. Build it once and go.
 ## Running It
 
 The display is a client of the backend — it reads its grid, charset, colours, timing and
-its entire rotation from the server's `/api/config`. `web/dist` is **not** deployable on
+its entire rotation from the server's `/api/config`. `board/dist` is **not** deployable on
 its own; there is no static/no-server mode.
 
 ```bash
@@ -47,10 +47,12 @@ pnpm build
 pnpm -C backend start
 ```
 
-The backend serves `web/dist`, so the frontend has to be built before it will show
-anything. For development, `pnpm dev` runs Vite on http://localhost:5173 and the backend
-on 8080 together, with `/api` and `/ws` proxied — run both, since `pnpm -C web dev` alone
-has no server to read its config from.
+The backend serves `board/dist` and `admin/dist`, so both frontends have to be built
+before they will show anything. For development, `pnpm dev` starts all three processes:
+the board on http://localhost:5173, the admin on 5174, and the backend on 8080. Run them
+together — a Vite server alone has no backend to read its config from. The board's dev
+server proxies `/api` and `/ws` to the backend and `/admin` to the admin's, so
+http://localhost:5173 behaves like the deployed app.
 
 | URL                                  | What                                               |
 | ------------------------------------ | -------------------------------------------------- |
@@ -118,19 +120,20 @@ layout change — grid, charset, palette, animation timing — reloads the page.
 
 ## File Structure
 
-A pnpm workspace with two packages: `web` (frontend) and `backend` (server).
+A pnpm workspace with three packages: `board` (the display), `admin` (the dashboard) and
+`backend` (the server). The two frontends share no code — they are separate Vite builds,
+served by the backend at `/` and `/admin`.
 
 ```
 flipoff/
   pnpm-workspace.yaml     — Workspace definition
-  Dockerfile              — Container image (builds web, runs the backend)
+  Dockerfile              — Container image (builds both frontends, runs the backend)
   docker-compose.yml      — Docker Compose with persistent volume
   PLUGINS.md              — Plugin development guide
-  web/
+  board/
     index.html            — Main display page
     display.html          — Standalone fullscreen display (no chrome)
-    admin.html            — Admin dashboard
-    vite.config.ts        — Build config: 3 entry pages, dev proxy to the backend
+    vite.config.ts        — Build config: 2 entry pages, dev proxy to the backend
     public/
       images/             — Screenshot and other static images
     src/
@@ -141,8 +144,8 @@ flipoff/
       MessageRotator.js   — Shuffle, random mode, remote override
       KeyboardController.js — Keyboard shortcuts (F, M, R, C, arrows, etc.)
       RemoteMessageSync.js — WebSocket sync and reconnection
-      admin.js            — Admin dashboard UI
-      constants.js        — Fetches /api/config and exports it as module constants
+      config.js           — Board slug, /api/config fetch with retry, boot presentation
+      statusScreen.js     — Connecting / failure / reconnecting screens
       flapAudio.js        — Embedded base64 audio clip
       audio/              — Joke mode: rubber duck squeak, fart finisher
       css/
@@ -151,6 +154,13 @@ flipoff/
         board.css         — Board container, accent bars, shortcuts overlay
         tile.css          — Split-flap tile halves and flip animations
         responsive.css    — Media queries (mobile through 4K)
+  admin/
+    index.html            — Admin dashboard
+    vite.config.ts        — Build config: base '/admin/', dev proxy to the backend
+    src/
+      admin.js            — Admin dashboard UI
+      css/
+        reset.css         — CSS reset (its own copy; the packages share nothing)
         admin.css         — Admin dashboard styles
   backend/
     config.json           — Grid, timing, charset, colors, seed messages

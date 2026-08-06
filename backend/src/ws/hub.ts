@@ -29,7 +29,7 @@ export interface WsHub {
 /**
  * Attaches a `/ws` endpoint to the http server and tracks sockets per board.
  * The wire format -- one JSON `{type, payload}` per frame -- is what
- * web/src/RemoteMessageSync.js already speaks, so it must not drift.
+ * board/src/RemoteMessageSync.js already speaks, so it must not drift.
  */
 export function createWsHub(server: Server, registry: BoardRegistry, plugins: PluginRegistry): WsHub {
   const wss = new WebSocketServer({ noServer: true })

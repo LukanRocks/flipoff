@@ -1,0 +1,12 @@
+packages:
+  - 'web'
+  - 'backend'
+
+# Supply-chain hardening
+strictDepBuilds: true
+minimumReleaseAge: 2880 # minutes = 48h cooldown on newly published versions
+trustPolicy: no-downgrade
+trustPolicyIgnoreAfter: 129600 # minutes = 90d; versions older than this skip trust checks (minimumReleaseAge covers the fresh end)
+
+allowBuilds:
+  esbuild: true

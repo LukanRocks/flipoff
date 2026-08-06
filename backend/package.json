@@ -1,0 +1,10 @@
+{
+  "name": "flipoff-backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "python3 server.py",
+    "start": "python3 server.py",
+    "build": "node -e \"console.log('flipoff-backend: still Python, nothing to build')\""
+  }
+}

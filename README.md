@@ -2,13 +2,13 @@
 
 **Turn any TV into a retro split-flap display.** The classic flip-board look, without the $3,500 hardware. And it's free.
 
-![FlipOff Screenshot](assets/images/screenshot.png)
+![FlipOff Screenshot](web/public/images/screenshot.png)
 
 ## What is this?
 
 FlipOff is a free, open-source web app that emulates a classic mechanical split-flap (flip-board) airport terminal display — the kind you'd see at train stations and airports. It runs full-screen in any browser, turning a TV or large monitor into a beautiful retro display.
 
-No accounts. No subscriptions. No $199 fee. Just open `index.html` and go.
+No accounts. No subscriptions. No $199 fee. Build it once and go.
 
 ## Features
 
@@ -28,7 +28,7 @@ No accounts. No subscriptions. No $199 fee. Just open `index.html` and go.
 - Keyboard controls for manual navigation
 - Emoji support in messages (animate through random charset characters before landing)
 - Responsive from mobile to 4K displays
-- Pure vanilla HTML/CSS/JS frontend — no frameworks, no build tools, no npm
+- Vanilla HTML/CSS/JS frontend — no UI framework, just Vite for bundling
 
 ## Deployment Options
 
@@ -36,7 +36,7 @@ FlipOff can run in three ways. Choose the one that fits your needs:
 
 |                                    | GitHub Pages             | Static Server            | Docker / Backend             |
 | ---------------------------------- | ------------------------ | ------------------------ | ---------------------------- |
-| **Setup**                          | Fork + enable Pages      | `python3 -m http.server` | `docker compose up --build`  |
+| **Setup**                          | Fork + enable Pages      | Build + serve `web/dist` | `docker compose up --build`  |
 | **Display + animations**           | Yes                      | Yes                      | Yes                          |
 | **Sound modes**                    | Yes                      | Yes                      | Yes                          |
 | **Dynamic date/time + weather**    | Yes                      | Yes                      | Yes                          |
@@ -52,15 +52,19 @@ FlipOff can run in three ways. Choose the one that fits your needs:
 
 ### Option 1: GitHub Pages (easiest, free hosting)
 
-Deploy to GitHub Pages for a zero-maintenance public display:
+Deploy the built bundle to GitHub Pages for a zero-maintenance public display. Build it with:
 
-1. **Fork this repository** on GitHub
-2. Go to your fork's **Settings → Pages**
-3. Under **Source**, select **GitHub Actions**
-4. Push any change to `main` (or go to **Actions → Deploy to GitHub Pages → Run workflow**)
-5. Your display will be live at `https://<your-username>.github.io/flipoff/`
+```bash
+pnpm install && pnpm -C web build
+```
 
-To customize messages, edit `config.json` in your fork and push — GitHub Actions will redeploy automatically.
+then publish `web/dist` — via a Pages workflow, or by pushing that directory to a `gh-pages`
+branch. The bundle uses relative asset URLs, so it works at a domain root and under a
+`https://<your-username>.github.io/flipoff/` sub-path alike.
+
+To customize messages, edit `web/public/config.json` and rebuild — or edit
+`web/dist/config.json` in the deployed output directly, since it is fetched at runtime
+rather than baked into the bundle.
 
 Everything runs in the browser. No server needed. Dynamic date/time and weather work because they use client-side APIs (the browser's clock and free public APIs for geolocation + weather).
 
@@ -71,15 +75,19 @@ Run on a local machine or Raspberry Pi to display on a TV:
 ```bash
 git clone https://github.com/<your-username>/flipoff.git
 cd flipoff
-python3 -m http.server 8080
-# Open http://localhost:8080
+pnpm install
+pnpm -C web build
+npx serve web/dist
 ```
 
-Same features as GitHub Pages, but you can edit `config.json` and refresh the browser to see changes immediately. Good for a home display or office TV.
+Same features as GitHub Pages, but you can edit `web/dist/config.json` and refresh the browser to see changes immediately. Good for a home display or office TV.
 
 Any static file server works — nginx, Apache, `npx serve`, etc.
 
-### Option 3: Docker / Python backend (full features)
+For live-reloading development, `pnpm -C web dev` runs the Vite dev server on
+http://localhost:5173 instead.
+
+### Option 3: Docker / backend (full features)
 
 Run the full backend for admin dashboard, plugins, multi-board, and remote control:
 
@@ -91,9 +99,14 @@ cd flipoff
 docker compose up --build
 
 # Or without Docker:
-pip install -r requirements.txt
-python server.py
+pnpm install && pnpm -C web build
+pip install -r backend/requirements.txt
+python backend/server.py
 ```
+
+The backend serves `web/dist`, so the frontend has to be built before it will show
+anything. Running it outside Docker needs **Python 3.10 or newer** — note that macOS ships
+3.9, which will not start the server.
 
 | URL                                  | What                                               |
 | ------------------------------------ | -------------------------------------------------- |
@@ -104,11 +117,11 @@ python server.py
 
 The admin password is auto-generated on first run and printed to the console. Set it explicitly with the `ADMIN_PASSWORD` environment variable.
 
-Board config and screens persist in a Docker volume (`flipoff-data`). Message changes in `config.json` are picked up automatically on restart — no need to reset the volume.
+Board config and screens persist in a Docker volume (`flipoff-data`). Message changes in `web/public/config.json` are picked up automatically on rebuild — no need to reset the volume.
 
 ## Dynamic Messages
 
-Add dynamic messages to `config.json` alongside regular quotes:
+Add dynamic messages to `web/public/config.json` alongside regular quotes:
 
 ```json
 {
@@ -131,7 +144,7 @@ Add dynamic messages to `config.json` alongside regular quotes:
 |                      | Control Panel                                   | Admin Dashboard                                            |
 | -------------------- | ----------------------------------------------- | ---------------------------------------------------------- |
 | **How it works**     | BroadcastChannel (tab-to-tab)                   | REST API + WebSocket                                       |
-| **Requires backend** | No                                              | Yes (`python server.py`)                                   |
+| **Requires backend** | No                                              | Yes (`python backend/server.py`)                           |
 | **Reach**            | Same browser only                               | Any device on the network                                  |
 | **Auth**             | None                                            | Password                                                   |
 | **Features**         | Custom message, clock, countdown, message queue | Board config, screen management, plugins, message override |
@@ -161,58 +174,66 @@ Dynamic messages (date/time, weather) support per-row coloring — airport-board
 
 ## File Structure
 
+A pnpm workspace with two packages: `web` (frontend) and `backend` (server).
+
 ```
 flipoff/
-  index.html              — Main display page
-  display.html            — Standalone fullscreen display (no chrome)
-  control.html            — Browser-based control panel
-  admin.html              — Admin dashboard (server-side)
-  config.json             — Configuration (grid, timing, messages, colors)
-  server.py               — Python backend (aiohttp) with API, WebSocket, plugins
-  requirements.txt        — Python dependencies
-  Dockerfile              — Container image (runs server.py)
+  pnpm-workspace.yaml     — Workspace definition
+  Dockerfile              — Container image (builds web, runs the backend)
   docker-compose.yml      — Docker Compose with persistent volume
   PLUGINS.md              — Plugin development guide
-  css/
-    reset.css             — CSS reset
-    layout.css            — Page layout, nav buttons, countdown bar, fullscreen
-    board.css             — Board container, accent bars, shortcuts overlay
-    tile.css              — Split-flap tile halves and flip animations
-    responsive.css        — Media queries (mobile through 4K)
-    control.css           — Control panel dark theme
-    admin.css             — Admin dashboard styles
-  js/
-    main.js               — Entry point, audio init, fullscreen, remote sync
-    Board.js              — Tile grid, display modes, row colors, transitions
-    Tile.js               — Split-flap flip with character stepping and emoji support
-    SoundEngine.js        — Sound profiles, tick extraction, stereo panning
-    MessageRotator.js     — Shuffle, pinned start order, random mode, remote override
-    KeyboardController.js — Keyboard shortcuts (F, M, R, C, arrows, etc.)
-    DynamicMessages.js    — Date/time and weather providers with colored output
-    ControlChannel.js     — BroadcastChannel wrapper for control panel
-    boardFormatter.js     — Text wrapping and centering for the board grid
-    RemoteMessageSync.js  — REST + WebSocket sync with the backend
-    control.js            — Control panel logic (custom, clock, countdown, queue)
-    admin.js              — Admin dashboard UI
-    constants.js          — Config loader (reads config.json, exports defaults)
-    flapAudio.js          — Embedded base64 audio clip
-  ass-ets/audio/
-    farrrt.wav            — Joke mode: fart finisher
-    mixkit-rubber-duck-squeak-1014.wav — Joke mode: rubber duck squeak
-  plugins/
-    base.py               — ScreenPlugin base class and types
-    __init__.py            — Plugin discovery and loader
-    weather/              — Open-Meteo 3-day forecast
-    github/               — Repo stats, open issues/PRs
-    api_ninjas/           — Quote of the Day, random quotes, crypto prices
-  tests/                  — Backend, plugin, and config.json test suite
-  .github/workflows/
-    deploy.yml            — GitHub Pages deployment
+  web/
+    index.html            — Main display page
+    display.html          — Standalone fullscreen display (no chrome)
+    control.html          — Browser-based control panel
+    admin.html            — Admin dashboard (needs the backend)
+    vite.config.ts        — Build config: 4 entry pages, dev proxy to the backend
+    public/
+      config.json         — Configuration (grid, timing, messages, colors)
+      images/             — Screenshot and other static images
+    src/
+      main.js             — Entry point, audio init, fullscreen, remote sync
+      Board.js            — Tile grid, display modes, row colors, transitions
+      Tile.js             — Split-flap flip with character stepping and emoji support
+      SoundEngine.js      — Sound profiles, tick extraction, stereo panning
+      MessageRotator.js   — Shuffle, pinned start order, random mode, remote override
+      KeyboardController.js — Keyboard shortcuts (F, M, R, C, arrows, etc.)
+      DynamicMessages.js  — Date/time and weather providers with colored output
+      ControlChannel.js   — BroadcastChannel wrapper for control panel
+      boardFormatter.js   — Text wrapping and centering for the board grid
+      RemoteMessageSync.js — REST + WebSocket sync with the backend
+      control.js          — Control panel logic (custom, clock, countdown, queue)
+      admin.js            — Admin dashboard UI
+      constants.js        — Config loader (reads config.json, exports defaults)
+      flapAudio.js        — Embedded base64 audio clip
+      audio/              — Joke mode: rubber duck squeak, fart finisher
+      css/
+        reset.css         — CSS reset
+        layout.css        — Page layout, nav buttons, countdown bar, fullscreen
+        board.css         — Board container, accent bars, shortcuts overlay
+        tile.css          — Split-flap tile halves and flip animations
+        responsive.css    — Media queries (mobile through 4K)
+        control.css       — Control panel dark theme
+        admin.css         — Admin dashboard styles
+  backend/
+    server.py             — Backend (aiohttp) with API, WebSocket, plugins
+    requirements.txt      — Python dependencies
+    plugins/
+      base.py             — ScreenPlugin base class and types
+      __init__.py         — Plugin discovery and loader
+      weather/            — Open-Meteo 3-day forecast
+      github/             — Repo stats, open issues/PRs
+      api_ninjas/         — Quote of the Day, random quotes, crypto prices
+    tests/                — Backend, plugin, and config.json test suite
 ```
+
+> The backend is mid-migration from Python to TypeScript. `backend/server.py` is the
+> current implementation; the port replaces it with `backend/src/` and drops
+> `requirements.txt`.
 
 ## Customization
 
-Edit `config.json` to change:
+Edit `web/public/config.json` to change:
 
 - **Messages**: Static quotes (5-line arrays) and dynamic markers (`{"dynamic": "datetime"}`, `{"dynamic": "weather"}`)
 - **Grid size**: `grid.cols` and `grid.rows`
@@ -220,7 +241,7 @@ Edit `config.json` to change:
 - **Colors**: `accentColors` array
 - **Character set**: `charset` string (includes A-Z, 0-9, punctuation, parentheses)
 
-Message changes in `config.json` take effect on restart — no need to reset Docker volumes or clear state.
+Message changes in `web/public/config.json` take effect on rebuild/restart — no need to reset Docker volumes or clear state.
 
 When running with the backend, board config can also be changed at runtime through the admin dashboard.
 

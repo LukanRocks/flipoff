@@ -14,34 +14,34 @@ A plugin:
 - can persist plugin-specific runtime state between refreshes
 - can optionally share settings with other plugins in the same family
 
-Plugins are discovered automatically from the `plugins/` package.
+Plugins are discovered automatically from the `backend/plugins/` package.
 
 ## Where Plugins Live
 
-Plugins can be placed anywhere under `plugins/` as long as they are valid Python modules.
+Plugins can be placed anywhere under `backend/plugins/` as long as they are valid Python modules.
 
 Current examples:
-- `plugins/weather/open_meteo_forecast.py`
-- `plugins/github/repo_stats.py`
-- `plugins/github/open_work.py`
-- `plugins/api_ninjas/random_quote.py`
-- `plugins/api_ninjas/quote_of_the_day.py`
-- `plugins/api_ninjas/crypto_prices.py`
+- `backend/plugins/weather/open_meteo_forecast.py`
+- `backend/plugins/github/repo_stats.py`
+- `backend/plugins/github/open_work.py`
+- `backend/plugins/api_ninjas/random_quote.py`
+- `backend/plugins/api_ninjas/quote_of_the_day.py`
+- `backend/plugins/api_ninjas/crypto_prices.py`
 
 You can also create plugin families with shared helpers:
-- `plugins/github/lib/common.py`
-- `plugins/api_ninjas/lib/common.py`
+- `backend/plugins/github/lib/common.py`
+- `backend/plugins/api_ninjas/lib/common.py`
 
 This structure is encouraged. It lets multiple plugins share common API clients, formatting logic, or validation helpers without pushing everything into the top level.
 
 ## Discovery Rules
 
-Plugin discovery is implemented in [plugins/__init__.py](/Users/vultuk/Development/Personal/flipoff/plugins/__init__.py).
+Plugin discovery is implemented in [backend/plugins/__init__.py](backend/plugins/__init__.py).
 
 The loader:
-- recursively scans `plugins/**/*.py`
+- recursively scans `backend/plugins/**/*.py`
 - ignores files named `__init__.py`
-- ignores `plugins/base.py`
+- ignores `backend/plugins/base.py`
 - imports each remaining module
 - registers the module-level `PLUGIN` object if present
 
@@ -71,7 +71,7 @@ This means plugin configuration is user-local, not checked into the repo.
 
 ## The Plugin Base API
 
-All plugins are built on [plugins/base.py](/Users/vultuk/Development/Personal/flipoff/plugins/base.py).
+All plugins are built on [backend/plugins/base.py](backend/plugins/base.py).
 
 Core types:
 - `PluginManifest`
@@ -377,7 +377,7 @@ Bad:
 
 Use this structure:
 
-1. Put family-wide helpers in `plugins/<family>/lib/common.py`
+1. Put family-wide helpers in `backend/plugins/<family>/lib/common.py`
 2. Put one plugin per file
 3. Expose one `PLUGIN = ...` object per plugin module
 4. Keep manifest declarations near the top of the file
@@ -490,16 +490,16 @@ At minimum, test:
 Useful commands:
 
 ```bash
-python3 -m py_compile plugins/<family>/<plugin>.py
+python3 -m py_compile backend/plugins/<family>/<plugin>.py
 python3 -m unittest discover -s tests -v
 ```
 
-If your plugin adds parsing or formatting logic, add targeted unit tests under `tests/`.
+If your plugin adds parsing or formatting logic, add targeted unit tests under `backend/tests/`.
 
 Existing examples:
-- [tests/test_server.py](/Users/vultuk/Development/Personal/flipoff/tests/test_server.py)
-- [tests/test_api_ninjas_crypto_prices.py](/Users/vultuk/Development/Personal/flipoff/tests/test_api_ninjas_crypto_prices.py)
-- [tests/test_api_ninjas_quotes.py](/Users/vultuk/Development/Personal/flipoff/tests/test_api_ninjas_quotes.py)
+- [backend/tests/test_server.py](backend/tests/test_server.py)
+- [backend/tests/test_api_ninjas_crypto_prices.py](backend/tests/test_api_ninjas_crypto_prices.py)
+- [backend/tests/test_api_ninjas_quotes.py](backend/tests/test_api_ninjas_quotes.py)
 
 ## Practical Guidelines
 
@@ -516,15 +516,15 @@ Existing examples:
 ## Current Built-In Plugin Families
 
 Weather:
-- `plugins/weather/open_meteo_forecast.py`
+- `backend/plugins/weather/open_meteo_forecast.py`
 
 GitHub:
-- `plugins/github/repo_stats.py`
-- `plugins/github/open_work.py`
+- `backend/plugins/github/repo_stats.py`
+- `backend/plugins/github/open_work.py`
 
 API Ninjas:
-- `plugins/api_ninjas/random_quote.py`
-- `plugins/api_ninjas/quote_of_the_day.py`
-- `plugins/api_ninjas/crypto_prices.py`
+- `backend/plugins/api_ninjas/random_quote.py`
+- `backend/plugins/api_ninjas/quote_of_the_day.py`
+- `backend/plugins/api_ninjas/crypto_prices.py`
 
 These are the best references when creating a new plugin.

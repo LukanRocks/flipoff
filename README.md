@@ -2,7 +2,7 @@
 
 **Turn any TV into a retro split-flap display.** The classic flip-board look, without the $3,500 hardware. And it's free.
 
-![FlipOff Screenshot](screenshot.png)
+![FlipOff Screenshot](assets/images/screenshot.png)
 
 ## What is this?
 
@@ -34,21 +34,21 @@ No accounts. No subscriptions. No $199 fee. Just open `index.html` and go.
 
 FlipOff can run in three ways. Choose the one that fits your needs:
 
-| | GitHub Pages | Static Server | Docker / Backend |
-|---|---|---|---|
-| **Setup** | Fork + enable Pages | `python3 -m http.server` | `docker compose up --build` |
-| **Display + animations** | Yes | Yes | Yes |
-| **Sound modes** | Yes | Yes | Yes |
-| **Dynamic date/time + weather** | Yes | Yes | Yes |
-| **Keyboard shortcuts** | Yes | Yes | Yes |
-| **Control panel (same-browser)** | Yes | Yes | Yes |
-| **Emoji + colored rows** | Yes | Yes | Yes |
-| **config.json customization** | Yes (edit before deploy) | Yes | Yes (live reload on restart) |
-| **Admin dashboard** | No | No | Yes |
-| **Server-side plugins** | No | No | Yes |
-| **REST API / WebSocket** | No | No | Yes |
-| **Multi-board support** | No | No | Yes |
-| **Remote control (other devices)** | No | No | Yes |
+|                                    | GitHub Pages             | Static Server            | Docker / Backend             |
+| ---------------------------------- | ------------------------ | ------------------------ | ---------------------------- |
+| **Setup**                          | Fork + enable Pages      | `python3 -m http.server` | `docker compose up --build`  |
+| **Display + animations**           | Yes                      | Yes                      | Yes                          |
+| **Sound modes**                    | Yes                      | Yes                      | Yes                          |
+| **Dynamic date/time + weather**    | Yes                      | Yes                      | Yes                          |
+| **Keyboard shortcuts**             | Yes                      | Yes                      | Yes                          |
+| **Control panel (same-browser)**   | Yes                      | Yes                      | Yes                          |
+| **Emoji + colored rows**           | Yes                      | Yes                      | Yes                          |
+| **config.json customization**      | Yes (edit before deploy) | Yes                      | Yes (live reload on restart) |
+| **Admin dashboard**                | No                       | No                       | Yes                          |
+| **Server-side plugins**            | No                       | No                       | Yes                          |
+| **REST API / WebSocket**           | No                       | No                       | Yes                          |
+| **Multi-board support**            | No                       | No                       | Yes                          |
+| **Remote control (other devices)** | No                       | No                       | Yes                          |
 
 ### Option 1: GitHub Pages (easiest, free hosting)
 
@@ -95,12 +95,12 @@ pip install -r requirements.txt
 python server.py
 ```
 
-| URL | What |
-|-----|------|
-| `http://localhost:8080` | Display |
-| `http://localhost:8080/control.html` | Control panel (same-browser tab-to-tab) |
-| `http://localhost:8080/admin` | Admin dashboard (network-wide, password-protected) |
-| `http://localhost:8080/display.html` | Standalone fullscreen display (no header/hero) |
+| URL                                  | What                                               |
+| ------------------------------------ | -------------------------------------------------- |
+| `http://localhost:8080`              | Display                                            |
+| `http://localhost:8080/control.html` | Control panel (same-browser tab-to-tab)            |
+| `http://localhost:8080/admin`        | Admin dashboard (network-wide, password-protected) |
+| `http://localhost:8080/display.html` | Standalone fullscreen display (no header/hero)     |
 
 The admin password is auto-generated on first run and printed to the console. Set it explicitly with the `ADMIN_PASSWORD` environment variable.
 
@@ -112,18 +112,14 @@ Add dynamic messages to `config.json` alongside regular quotes:
 
 ```json
 {
-  "messages": [
-    {"dynamic": "datetime"},
-    {"dynamic": "weather"},
-    ["", "🏛️ GOD IS IN", "THE DETAILS .", "(LUDWIG MIES)", ""]
-  ]
+  "messages": [{ "dynamic": "datetime" }, { "dynamic": "weather" }, ["", "🏛️ GOD IS IN", "THE DETAILS .", "(LUDWIG MIES)", ""]]
 }
 ```
 
-| Type | What it shows | Color |
-|------|--------------|-------|
-| `datetime` | 🕐 Time, day of week, 📅 date, timezone (e.g. `GMT+1`) | Airport-board yellow |
-| `weather` | City, 🇵🇹 country flag + name, temperature, condition | Temperature gradient (blue at -10C → red at 40C) |
+| Type       | What it shows                                          | Color                                            |
+| ---------- | ------------------------------------------------------ | ------------------------------------------------ |
+| `datetime` | 🕐 Time, day of week, 📅 date, timezone (e.g. `GMT+1`) | Airport-board yellow                             |
+| `weather`  | City, 🇵🇹 country flag + name, temperature, condition   | Temperature gradient (blue at -10C → red at 40C) |
 
 - **Date/time** always shows first, **weather** second, then all messages rotate randomly
 - Weather is auto-detected from IP geolocation (no API key needed) using Open-Meteo
@@ -132,28 +128,28 @@ Add dynamic messages to `config.json` alongside regular quotes:
 
 ## Control Panel vs Admin Dashboard
 
-| | Control Panel | Admin Dashboard |
-|---|---|---|
-| **How it works** | BroadcastChannel (tab-to-tab) | REST API + WebSocket |
-| **Requires backend** | No | Yes (`python server.py`) |
-| **Reach** | Same browser only | Any device on the network |
-| **Auth** | None | Password |
-| **Features** | Custom message, clock, countdown, message queue | Board config, screen management, plugins, message override |
+|                      | Control Panel                                   | Admin Dashboard                                            |
+| -------------------- | ----------------------------------------------- | ---------------------------------------------------------- |
+| **How it works**     | BroadcastChannel (tab-to-tab)                   | REST API + WebSocket                                       |
+| **Requires backend** | No                                              | Yes (`python server.py`)                                   |
+| **Reach**            | Same browser only                               | Any device on the network                                  |
+| **Auth**             | None                                            | Password                                                   |
+| **Features**         | Custom message, clock, countdown, message queue | Board config, screen management, plugins, message override |
 
 Both are accessible from the display page header. The Admin button only appears when the backend is detected.
 
 ## Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `Enter` / `Space` | Next message |
-| `Arrow Left` | Previous message |
-| `Arrow Right` | Next message |
-| `F` | Toggle fullscreen |
-| `M` | Cycle sound mode (Authentic / Soft / Joke / Mute) |
-| `R` | Toggle random message order |
-| `C` | Cycle display mode (Color / Matrix / Grayscale) |
-| `Escape` | Exit fullscreen |
+| Key               | Action                                            |
+| ----------------- | ------------------------------------------------- |
+| `Enter` / `Space` | Next message                                      |
+| `Arrow Left`      | Previous message                                  |
+| `Arrow Right`     | Next message                                      |
+| `F`               | Toggle fullscreen                                 |
+| `M`               | Cycle sound mode (Authentic / Soft / Joke / Mute) |
+| `R`               | Toggle random message order                       |
+| `C`               | Cycle display mode (Color / Matrix / Grayscale)   |
+| `Escape`          | Exit fullscreen                                   |
 
 ## How It Works
 
@@ -217,6 +213,7 @@ flipoff/
 ## Customization
 
 Edit `config.json` to change:
+
 - **Messages**: Static quotes (5-line arrays) and dynamic markers (`{"dynamic": "datetime"}`, `{"dynamic": "weather"}`)
 - **Grid size**: `grid.cols` and `grid.rows`
 - **Timing**: `timing.flipStepDuration`, `timing.staggerDelay`, `timing.messageInterval`, etc.
@@ -229,11 +226,11 @@ When running with the backend, board config can also be changed at runtime throu
 
 ## Environment Variables (backend)
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `8080` | Server listen port |
-| `ADMIN_PASSWORD` | Auto-generated | Admin dashboard password |
-| `API_NINJAS_API_KEY` | — | API key for quote and crypto price plugins |
+| Variable             | Default        | Description                                |
+| -------------------- | -------------- | ------------------------------------------ |
+| `PORT`               | `8080`         | Server listen port                         |
+| `ADMIN_PASSWORD`     | Auto-generated | Admin dashboard password                   |
+| `API_NINJAS_API_KEY` | —              | API key for quote and crypto price plugins |
 
 ## License
 

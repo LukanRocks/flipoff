@@ -89,6 +89,34 @@ Two things follow that are easy to get wrong:
   rotation up for ~20s first, because a container restart is over in about a second and
   wiping the display for each one is worse than the staleness it prevents.
 
+## Tile sizing belongs to JavaScript, not to CSS
+
+`fitBoard()` in `main.js` sets `--tile-size` and `--tile-gap` inline on every paint that
+matters: after each `new Board(...)`, on `resize`, and on `fullscreenchange`. The values in
+`board.css` are a first-paint fallback and nothing else.
+
+This is not a preference. `cols` is server-configurable, so no `clamp()` can be right for
+every grid — the old `clamp(36px, 4.2vw, 62px)` resolved to 60.48px tiles at 1440px wide,
+which for 28 columns needs ~1810px inside a 1339px board, and `.board { overflow: hidden }`
+silently ate about seven columns off the ends. Nothing errored; the message just quietly
+lost its edges. Adding a breakpoint would only move which `cols` value breaks.
+
+If you go measuring this yourself, do not trust `scrollWidth` — it is clipped by the same
+overflow and under-reports. Read a tile's own `getBoundingClientRect()` and multiply.
+
+Two consequences:
+
+- **Measure, do not assume, what the chrome costs.** `chromeHeight()` reads the live
+  `offsetHeight` of `.loading-bar` and `.header`. Both are absent on `display.html` and
+  `display: none` in fullscreen, and reading them back is what makes one function correct
+  in all three cases instead of three hardcoded constants.
+- **`fitBoard` reads `board`, it does not close over it.** The boot board is replaced when
+  the real config arrives, and a captured reference would go on styling the discarded one.
+
+The nav icons are lucide paths pasted into `index.html` by hand, for the same reason
+`board/` has no other runtime dependency. `.is-off` on `.icon-btn` picks which of a
+button's icons shows; do not go back to selecting SVG children by position.
+
 ## config.json is backend-only
 
 `backend/config.json` holds grid size, animation timing, charset, accent colours and the

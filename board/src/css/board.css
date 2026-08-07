@@ -1,14 +1,21 @@
-/* Board Container */
+/*
+ * Board Container
+ *
+ * The tile variables here are only a first paint: `fitBoard()` in main.js
+ * overwrites both inline from the live grid. Sized to its own grid rather than
+ * to the page so `.board-section` can genuinely centre it, and painted the same
+ * colour as the page so the panel disappears and only the tiles read. Padding
+ * stays because the accent bars and the keyboard hint are positioned inside it.
+ */
 .board {
   --tile-size: clamp(36px, 4.2vw, 62px);
   --tile-gap: clamp(3px, 0.3vw, 5px);
 
   position: relative;
   background: #1a1a1a;
-  border-radius: 16px;
   padding: 28px 48px 40px;
-  width: 100%;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+  width: fit-content;
+  max-width: 100%;
   overflow: hidden;
 }
 
@@ -110,10 +117,8 @@
   font-weight: 700;
 }
 
-/* Fullscreen: fill the screen edge-to-edge */
+/* Fullscreen: less padding, so more of the screen goes to tiles */
 .fullscreen-active .board {
-  border-radius: 0;
-  box-shadow: none;
   padding: 24px 36px 36px;
 }
 

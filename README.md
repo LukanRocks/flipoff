@@ -21,8 +21,9 @@ No accounts. No subscriptions. No $199 fee. Build it once and go.
 - Connection indicator, and automatic reconnection: a display survives a server restart without anyone touching it
 - Multi-board support — run multiple independent displays from one server
 - Display modes: Color, Matrix, Grayscale accent palettes
-- Countdown progress bar showing time until next message (hidden in fullscreen)
-- Fullscreen TV mode with automatic tile resizing
+- Loading line across the top of the screen showing time until the next message (hidden in fullscreen)
+- Tiles sized to the viewport, so any grid the server is configured with fits at any width
+- Fullscreen TV mode
 - Keyboard controls for manual navigation
 - Emoji support in messages (animate through random charset characters before landing)
 - Responsive from mobile to 4K displays
@@ -138,7 +139,7 @@ flipoff/
     public/
       images/             — Screenshot and other static images
     src/
-      main.js             — Entry point, audio init, fullscreen, remote sync
+      main.js             — Entry point, audio init, tile fitting, fullscreen, remote sync
       Board.js            — Tile grid, display modes, transitions
       Tile.js             — Split-flap flip with character stepping and emoji support
       SoundEngine.js      — Sound profiles, tick extraction, stereo panning
@@ -151,10 +152,10 @@ flipoff/
       audio/              — Joke mode: rubber duck squeak, fart finisher
       css/
         reset.css         — CSS reset
-        layout.css        — Page layout, nav buttons, countdown bar, fullscreen
+        layout.css        — Page layout, nav icon buttons, tooltips, loading bar, fullscreen
         board.css         — Board container, accent bars, shortcuts overlay
         tile.css          — Split-flap tile halves and flip animations
-        responsive.css    — Media queries (mobile through 4K)
+        responsive.css    — Media queries for the chrome (tile sizing is main.js's job)
   admin/                  — React + TypeScript dashboard
     index.html            — App shell
     vite.config.ts        — Build config: base '/admin/', dev proxy to the backend

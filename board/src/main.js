@@ -19,6 +19,9 @@ import { connectingLines, failureLines, reconnectingLines } from './statusScreen
  */
 const OFFLINE_GRACE_MS = 20_000
 
+/** Floor for a computed tile, so a tiny window cannot produce a zero-size grid. */
+const MIN_TILE_SIZE = 8
+
 // Module scripts are deferred — the DOM is already parsed when this runs.
 void bootstrap()
 
@@ -29,6 +32,7 @@ async function bootstrap() {
   // Built before the server has been asked anything, so the wait and any
   // failures happen on the board rather than only in the console.
   let board = new Board(boardContainer, null, BOOT_PRESENTATION)
+  fitBoard()
   board.displayMessage(connectingLines())
 
   const displayConfig = await fetchConfig((failure) => board.displayMessage(failureLines(failure)))
@@ -39,6 +43,9 @@ async function bootstrap() {
   if (!samePresentation(BOOT_PRESENTATION, displayConfig)) {
     boardContainer.replaceChildren()
     board = new Board(boardContainer, null, displayConfig)
+    // The rebuild may have a different grid, and it is a new element either
+    // way -- the inline sizing from the boot board went with the old one.
+    fitBoard()
   }
 
   const soundEngine = new SoundEngine()
@@ -82,8 +89,10 @@ async function bootstrap() {
   const syncSoundUi = () => {
     if (!volumeBtn || !soundEngine.getSoundState) return
     const state = soundEngine.getSoundState()
-    volumeBtn.classList.toggle('muted', state.muted)
-    volumeBtn.title = `Sound mode: ${state.label}`
+    // `is-off` swaps volume-2 for volume-x; the label rides in the tooltip,
+    // which is the only place it is readable now that the button has no text.
+    volumeBtn.classList.toggle('is-off', state.muted)
+    volumeBtn.dataset.tooltip = `Sound: ${state.label}`
   }
   document.addEventListener('soundmodechange', syncSoundUi)
   syncSoundUi()
@@ -110,26 +119,22 @@ async function bootstrap() {
     })
   }
 
-  // PR #10: Fullscreen tile resizing
+  // Entering or leaving fullscreen changes both the chrome and the viewport.
   document.addEventListener('fullscreenchange', () => {
-    const isFs = !!document.fullscreenElement
-    document.body.classList.toggle('fullscreen-active', isFs)
+    document.body.classList.toggle('fullscreen-active', !!document.fullscreenElement)
+    // Reading offsetHeight below flushes the class change first, so the header
+    // and loading line already measure 0 by the time fitBoard() sees them.
+    fitBoard()
+  })
 
-    if (isFs) {
-      setTimeout(() => {
-        const padH = 72
-        const padV = 60
-        const gap = 5
-        const maxW = (window.innerWidth - padH - (board.cols - 1) * gap) / board.cols
-        const maxH = (window.innerHeight - padV - (board.rows - 1) * gap) / board.rows
-        const size = Math.floor(Math.min(maxW, maxH))
-        board.boardEl.style.setProperty('--tile-size', `${size}px`)
-        board.boardEl.style.setProperty('--tile-gap', `${gap}px`)
-      }, 100)
-    } else {
-      board.boardEl.style.removeProperty('--tile-size')
-      board.boardEl.style.removeProperty('--tile-gap')
-    }
+  // One frame per burst — a drag across the window fires resize continuously.
+  let resizeRaf = null
+  window.addEventListener('resize', () => {
+    if (resizeRaf !== null) return
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = null
+      fitBoard()
+    })
   })
 
   // Countdown progress bar — only runs rAF when a countdown is active
@@ -165,6 +170,42 @@ async function bootstrap() {
   }
 
   remoteSync.connect()
+
+  /**
+   * Scale the tiles to whatever space is left over.
+   *
+   * The grid is server-configurable, so no CSS clamp can be right for every
+   * `cols`: at 28 columns a 1440px window asked for ~1810px of tiles, and
+   * `.board`'s `overflow: hidden` quietly ate the outer columns at both edges.
+   * Measuring instead means any grid the server sends fits, on this page, on
+   * display.html, and in fullscreen — one code path where there used to be a
+   * CSS guess plus a fullscreen-only correction.
+   *
+   * Reads `board` rather than closing over it: the boot board is replaced once
+   * the real config arrives.
+   */
+  function fitBoard() {
+    const boardEl = board.boardEl
+    const style = getComputedStyle(boardEl)
+    const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+    const padY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+
+    // Integer rather than the old `clamp(3px, 0.3vw, 5px)`: a fractional gap
+    // multiplied across 27 columns is enough to overflow by a tile.
+    const gap = window.innerWidth <= 600 ? 2 : window.innerWidth <= 900 ? 3 : 5
+
+    const availableWidth = window.innerWidth - padX - (board.cols - 1) * gap
+    const availableHeight = window.innerHeight - chromeHeight() - padY - (board.rows - 1) * gap
+    const size = Math.max(MIN_TILE_SIZE, Math.floor(Math.min(availableWidth / board.cols, availableHeight / board.rows)))
+
+    boardEl.style.setProperty('--tile-size', `${size}px`)
+    boardEl.style.setProperty('--tile-gap', `${gap}px`)
+  }
+
+  /** Zero on display.html, which has no chrome, and in fullscreen, where it is hidden. */
+  function chromeHeight() {
+    return ['.loading-bar', '.header'].reduce((total, selector) => total + (document.querySelector(selector)?.offsetHeight ?? 0), 0)
+  }
 
   function handleConnectionStatus(status) {
     const indicator = document.getElementById('config-indicator')

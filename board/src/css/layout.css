@@ -21,11 +21,18 @@ body {
   flex-shrink: 0;
 }
 
+/*
+ * Full width and scaled, rather than a growing `width`. main.js repaints this
+ * every frame, so the old `transition: width 0.3s linear` only lagged behind —
+ * and animating the reset back to zero is what made the rewind between screens
+ * visible in the first place. A transform also stays off the layout path.
+ */
 .loading-fill {
   height: 100%;
-  width: 0%;
+  width: 100%;
   background: #00ff7f;
-  transition: width 0.3s linear;
+  transform: scaleX(0);
+  transform-origin: left;
 }
 
 /* Navbar */

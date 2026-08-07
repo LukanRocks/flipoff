@@ -172,26 +172,50 @@ async function bootstrap() {
     })
   })
 
-  // Countdown progress bar — only runs rAF when a countdown is active
-  const countdownFill = document.getElementById('countdown-fill')
-  if (countdownFill) {
-    let countdownRaf = null
-    const updateCountdown = () => {
-      const progress = rotator.getCountdownProgress()
-      if (progress !== null) {
-        countdownFill.style.width = `${(progress * 100).toFixed(1)}%`
-        countdownRaf = requestAnimationFrame(updateCountdown)
-      } else {
-        countdownFill.style.width = '0%'
-        countdownRaf = null
-      }
+  /*
+   * Loading line, as alternating sweeps: one screen draws the colour in, the
+   * next takes it away again. Nothing is ever rewound, which is what made the
+   * old bar snap -- it ran 0 to 100% and then had to get back to 0.
+   *
+   * Both halves travel left to right. Filling grows from the left edge;
+   * emptying retreats towards the right edge, so the boundary keeps moving the
+   * same way instead of draining backwards.
+   */
+  const loadingFill = document.getElementById('countdown-fill')
+  if (loadingFill) {
+    let filling = true
+    let counting = false
+
+    const paint = (progress) => {
+      // The two sweeps meet at a completely full or completely empty bar, so
+      // swapping the origin between them is invisible.
+      loadingFill.style.transformOrigin = filling ? 'left' : 'right'
+      loadingFill.style.transform = `scaleX(${filling ? progress : 1 - progress})`
     }
-    // Poll every second to detect when countdown starts, then switch to rAF
-    setInterval(() => {
-      if (countdownRaf === null && rotator.getCountdownProgress() !== null) {
-        countdownRaf = requestAnimationFrame(updateCountdown)
+
+    const tick = () => {
+      const progress = rotator.getCountdownProgress()
+
+      if (progress !== null) {
+        counting = true
+        paint(progress)
+      } else if (counting) {
+        // The rotator clears its countdown while the board flips to the next
+        // screen. Land exactly on full or empty rather than wherever the last
+        // frame fell, hold that through the flip, and hand the next screen the
+        // opposite sweep.
+        counting = false
+        paint(1)
+        filling = !filling
       }
-    }, 1000)
+
+      requestAnimationFrame(tick)
+    }
+
+    // Every frame, not only while a countdown is live. The gap between screens
+    // is the whole flip animation, and the 1s poll this replaces meant a sweep
+    // could begin up to a second late and jump to catch up.
+    requestAnimationFrame(tick)
   }
 
   // PR #2: Remote message sync

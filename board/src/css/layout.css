@@ -70,6 +70,7 @@ body {
 }
 
 .header-nav {
+  position: relative; /* anchors the shortcuts panel to the end of the row */
   display: flex;
   align-items: center;
   gap: 6px;
@@ -135,6 +136,52 @@ body {
 .icon-btn:hover::after,
 .icon-btn:focus-visible::after {
   opacity: 1;
+}
+
+/* The open panel already says what the button does; the bubble would sit on it. */
+.icon-btn[aria-expanded='true']::after {
+  opacity: 0;
+}
+
+/* Shortcuts panel — drops from the end of the nav row */
+.shortcuts-overlay {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 196px;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.92);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  z-index: 30;
+}
+
+.shortcuts-overlay.visible {
+  display: block;
+}
+
+.shortcuts-overlay div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 0;
+}
+
+.shortcuts-overlay kbd {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.shortcut-sound-mode {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 700;
 }
 
 /* Board — centred on both axes in whatever height the navbar leaves */

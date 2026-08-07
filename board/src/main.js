@@ -86,13 +86,19 @@ async function bootstrap() {
 
   // PR #4: Sound mode UI sync
   const volumeBtn = document.getElementById('volume-btn')
+  // Used to live on Board, which meant Board reached into page chrome to keep a
+  // label current. It is the same event either way, so it belongs here.
+  const shortcutSoundMode = document.querySelector('.shortcut-sound-mode')
   const syncSoundUi = () => {
-    if (!volumeBtn || !soundEngine.getSoundState) return
+    if (!soundEngine.getSoundState) return
     const state = soundEngine.getSoundState()
-    // `is-off` swaps volume-2 for volume-x; the label rides in the tooltip,
-    // which is the only place it is readable now that the button has no text.
-    volumeBtn.classList.toggle('is-off', state.muted)
-    volumeBtn.dataset.tooltip = `Sound: ${state.label}`
+    if (volumeBtn) {
+      // `is-off` swaps volume-2 for volume-x; the label rides in the tooltip,
+      // which is the only place it is readable now that the button has no text.
+      volumeBtn.classList.toggle('is-off', state.muted)
+      volumeBtn.dataset.tooltip = `Sound: ${state.label}`
+    }
+    if (shortcutSoundMode) shortcutSoundMode.textContent = state.label
   }
   document.addEventListener('soundmodechange', syncSoundUi)
   syncSoundUi()
@@ -116,6 +122,35 @@ async function bootstrap() {
       } else {
         document.documentElement.requestFullscreen().catch(() => {})
       }
+    })
+  }
+
+  // Keyboard shortcuts panel. It used to be a circle badge on the board itself
+  // labelled 'N' -- a key nothing ever handled -- so moving it to the nav takes
+  // a false affordance with it.
+  const shortcutsBtn = document.getElementById('shortcuts-btn')
+  const shortcutsOverlay = document.getElementById('shortcuts-overlay')
+  if (shortcutsBtn && shortcutsOverlay) {
+    const setShortcutsOpen = (open) => {
+      shortcutsOverlay.classList.toggle('visible', open)
+      shortcutsBtn.setAttribute('aria-expanded', String(open))
+    }
+
+    shortcutsBtn.addEventListener('click', (event) => {
+      // Without this the document listener below sees the same click and
+      // closes the panel in the same tick it was opened.
+      event.stopPropagation()
+      setShortcutsOpen(!shortcutsOverlay.classList.contains('visible'))
+    })
+
+    document.addEventListener('click', (event) => {
+      if (!shortcutsOverlay.contains(event.target)) setShortcutsOpen(false)
+    })
+
+    // Not KeyboardController's job: it ignores keys while a button has focus,
+    // which is exactly the state you are in right after opening this.
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') setShortcutsOpen(false)
     })
   }
 

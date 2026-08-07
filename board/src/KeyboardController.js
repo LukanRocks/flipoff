@@ -56,12 +56,12 @@ export class KeyboardController {
           this._showToast(labels[mode])
         }
         break
+      // The shortcuts panel also closes on Escape, but main.js owns that: it is
+      // page chrome, and this handler is skipped while a button has focus.
       case 'Escape':
         if (document.fullscreenElement) {
           document.exitFullscreen()
         }
-        const overlay = document.querySelector('.shortcuts-overlay')
-        if (overlay) overlay.classList.remove('visible')
         break
     }
   }

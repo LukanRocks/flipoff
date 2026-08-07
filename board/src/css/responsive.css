@@ -9,14 +9,14 @@
 /* Large screens / 4K TVs */
 @media (min-width: 2000px) {
   .board {
-    padding: 36px 36px 48px;
+    padding: 36px;
   }
 }
 
 /* Tablet */
 @media (max-width: 900px) {
   .board {
-    padding: 20px 16px 32px;
+    padding: 20px 16px;
   }
 
   .header {
@@ -32,7 +32,7 @@
 /* Mobile */
 @media (max-width: 600px) {
   .board {
-    padding: 12px 8px 24px;
+    padding: 12px 8px;
   }
 
   .header {
@@ -52,7 +52,8 @@
     display: none;
   }
 
-  .keyboard-hint {
+  /* Nothing to press these on, so the panel listing them is just clutter. */
+  #shortcuts-btn {
     display: none;
   }
 }

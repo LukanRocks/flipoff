@@ -73,35 +73,6 @@ export class Board {
     this.rightBar = this._createAccentBar('accent-bar-right')
     this.boardEl.appendChild(this.rightBar)
 
-    // Keyboard hint icon (bottom-left)
-    const hint = document.createElement('div')
-    hint.className = 'keyboard-hint'
-    hint.textContent = 'N'
-    hint.title = 'Keyboard shortcuts'
-    hint.addEventListener('click', (e) => {
-      e.stopPropagation()
-      const overlay = this.boardEl.querySelector('.shortcuts-overlay')
-      if (overlay) overlay.classList.toggle('visible')
-    })
-    this.boardEl.appendChild(hint)
-
-    // Shortcuts overlay
-    const overlay = document.createElement('div')
-    overlay.className = 'shortcuts-overlay'
-    overlay.innerHTML = `
-      <div><span>Next message</span><kbd>Enter</kbd></div>
-      <div><span>Previous</span><kbd>\u2190</kbd></div>
-      <div><span>Fullscreen</span><kbd>F</kbd></div>
-      <div><span>Sound: <strong class="shortcut-sound-mode">Authentic</strong></span><kbd>M</kbd></div>
-      <div><span>Random</span><kbd>R</kbd></div>
-      <div><span>Color mode</span><kbd>C</kbd></div>
-    `
-    this.boardEl.appendChild(overlay)
-
-    this.shortcutSoundModeEl = overlay.querySelector('.shortcut-sound-mode')
-    this._syncSoundShortcutLabel()
-    document.addEventListener('soundmodechange', () => this._syncSoundShortcutLabel())
-
     containerEl.appendChild(this.boardEl)
     this._updateAccentColors()
   }
@@ -131,7 +102,6 @@ export class Board {
   /** Lets the silent boot board adopt the real engine without being rebuilt. */
   setSoundEngine(soundEngine) {
     this.soundEngine = soundEngine
-    this._syncSoundShortcutLabel()
   }
 
   _updateAccentColors() {
@@ -141,12 +111,6 @@ export class Board {
     segments.forEach((seg) => {
       seg.style.backgroundColor = color
     })
-  }
-
-  _syncSoundShortcutLabel() {
-    if (!this.shortcutSoundModeEl || !this.soundEngine || !this.soundEngine.getSoundState) return
-    const state = this.soundEngine.getSoundState()
-    this.shortcutSoundModeEl.textContent = state.label
   }
 
   // PR #2: interrupt support

@@ -2,6 +2,13 @@ import { Tile } from './Tile.js'
 
 const DISPLAY_MODES = ['color', 'matrix', 'grayscale']
 
+/**
+ * One accent square per corner of the screen. They used to be two stacks of two
+ * pinned to the board's top corners -- same four squares, spread to the corners
+ * of the viewport instead.
+ */
+const ACCENT_CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+
 // PR #1: Display mode accent palettes. Only 'color' is server-configurable —
 // matrix and grayscale are fixed looks, not board settings.
 const FIXED_ACCENTS = {
@@ -37,10 +44,6 @@ export class Board {
     this.boardEl.style.setProperty('--grid-cols', this.cols)
     this.boardEl.style.setProperty('--grid-rows', this.rows)
 
-    // Left accent squares
-    this.leftBar = this._createAccentBar('accent-bar-left')
-    this.boardEl.appendChild(this.leftBar)
-
     // Tile grid
     this.gridEl = document.createElement('div')
     this.gridEl.className = 'tile-grid'
@@ -69,23 +72,17 @@ export class Board {
 
     this.boardEl.appendChild(this.gridEl)
 
-    // Right accent squares
-    this.rightBar = this._createAccentBar('accent-bar-right')
-    this.boardEl.appendChild(this.rightBar)
+    // Kept as children of the board even though they render at the screen's
+    // corners, so a rebuild disposes them along with everything else.
+    this.accentSquares = ACCENT_CORNERS.map((corner) => {
+      const square = document.createElement('div')
+      square.className = `accent-square accent-square-${corner}`
+      this.boardEl.appendChild(square)
+      return square
+    })
 
     containerEl.appendChild(this.boardEl)
     this._updateAccentColors()
-  }
-
-  _createAccentBar(extraClass) {
-    const bar = document.createElement('div')
-    bar.className = `accent-bar ${extraClass}`
-    for (let i = 0; i < 2; i++) {
-      const seg = document.createElement('div')
-      seg.className = 'accent-segment'
-      bar.appendChild(seg)
-    }
-    return bar
   }
 
   // PR #1: Display mode cycling
@@ -107,10 +104,9 @@ export class Board {
   _updateAccentColors() {
     const palette = this.accentsByMode[this.displayMode]
     const color = palette[this.accentIndex % palette.length]
-    const segments = this.boardEl.querySelectorAll('.accent-segment')
-    segments.forEach((seg) => {
-      seg.style.backgroundColor = color
-    })
+    for (const square of this.accentSquares) {
+      square.style.backgroundColor = color
+    }
   }
 
   // PR #2: interrupt support

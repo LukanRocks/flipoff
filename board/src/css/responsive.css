@@ -23,9 +23,9 @@
     padding: 14px 20px;
   }
 
-  .accent-segment {
-    width: 12px;
-    height: 12px;
+  .accent-square {
+    --accent-size: 12px;
+    --accent-inset: 12px;
   }
 }
 
@@ -48,8 +48,11 @@
     height: 30px;
   }
 
-  .accent-bar {
-    display: none;
+  /* They were hidden here when they sat inside the board's tiny mobile padding.
+     At the screen's corners there is room for them. */
+  .accent-square {
+    --accent-size: 10px;
+    --accent-inset: 10px;
   }
 
   /* Nothing to press these on, so the panel listing them is just clutter. */

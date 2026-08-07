@@ -29,29 +29,55 @@
   justify-content: center;
 }
 
-/* Accent Squares — small stacked blocks in top corners */
-.accent-bar {
-  position: absolute;
-  top: 30px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+/*
+ * Accent Squares — one in each corner of the screen.
+ *
+ * `fixed`, not `absolute`: they belong to the viewport, not to the board, and
+ * that is also what carries them past `.board`'s `overflow: hidden`. They stay
+ * children of `.board` only so a rebuild disposes them, which works because
+ * `.board` sets no `transform`, `filter`, `perspective` or `contain` — any one
+ * of those would make it their containing block and snap all four back inside
+ * the panel.
+ */
+.accent-square {
+  --accent-size: 14px;
+  --accent-inset: 14px;
+
+  position: fixed;
+  width: var(--accent-size);
+  height: var(--accent-size);
+  border-radius: 2px;
+  transition: background-color 0.5s ease;
   z-index: 5;
 }
 
-.accent-bar-left {
-  left: 18px;
+/*
+ * The top pair clears the navbar rather than sitting behind it.
+ * `--chrome-height` is measured by `fitBoard()` in main.js, so this is right
+ * without hardcoding the header's height, and collapses to a true screen corner
+ * where there is no navbar to clear — in fullscreen and on display.html.
+ */
+.accent-square-top-left,
+.accent-square-top-right {
+  top: calc(var(--chrome-height, 0px) + var(--accent-inset));
 }
 
-.accent-bar-right {
-  right: 18px;
+.accent-square-top-left {
+  left: var(--accent-inset);
 }
 
-.accent-segment {
-  width: 14px;
-  height: 14px;
-  border-radius: 2px;
-  transition: background-color 0.5s ease;
+.accent-square-top-right {
+  right: var(--accent-inset);
+}
+
+.accent-square-bottom-left {
+  bottom: var(--accent-inset);
+  left: var(--accent-inset);
+}
+
+.accent-square-bottom-right {
+  bottom: var(--accent-inset);
+  right: var(--accent-inset);
 }
 
 /* Fullscreen: less padding, so more of the screen goes to tiles */

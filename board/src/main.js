@@ -229,8 +229,14 @@ async function bootstrap() {
     // multiplied across 27 columns is enough to overflow by a tile.
     const gap = window.innerWidth <= 600 ? 2 : window.innerWidth <= 900 ? 3 : 5
 
+    // Published for CSS: the top accent squares sit below the navbar, and this
+    // is the only place its height is measured. Runs before the first paint,
+    // and again whenever the chrome can have changed.
+    const chrome = chromeHeight()
+    document.documentElement.style.setProperty('--chrome-height', `${chrome}px`)
+
     const availableWidth = window.innerWidth - padX - (board.cols - 1) * gap
-    const availableHeight = window.innerHeight - chromeHeight() - padY - (board.rows - 1) * gap
+    const availableHeight = window.innerHeight - chrome - padY - (board.rows - 1) * gap
     const size = Math.max(MIN_TILE_SIZE, Math.floor(Math.min(availableWidth / board.cols, availableHeight / board.rows)))
 
     boardEl.style.setProperty('--tile-size', `${size}px`)

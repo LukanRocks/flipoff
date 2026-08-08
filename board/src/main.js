@@ -236,9 +236,9 @@ async function bootstrap() {
    * The grid is server-configurable, so no CSS clamp can be right for every
    * `cols`: at 28 columns a 1440px window asked for ~1810px of tiles, and
    * `.board`'s `overflow: hidden` quietly ate the outer columns at both edges.
-   * Measuring instead means any grid the server sends fits, on this page, on
-   * display.html, and in fullscreen — one code path where there used to be a
-   * CSS guess plus a fullscreen-only correction.
+   * Measuring instead means any grid the server sends fits, windowed or
+   * fullscreen — one code path where there used to be a CSS guess plus a
+   * fullscreen-only correction.
    *
    * Reads `board` rather than closing over it: the boot board is replaced once
    * the real config arrives.
@@ -267,7 +267,12 @@ async function bootstrap() {
     boardEl.style.setProperty('--tile-gap', `${gap}px`)
   }
 
-  /** Zero on display.html, which has no chrome, and in fullscreen, where it is hidden. */
+  /**
+   * The navbar only fades, so this is a constant 63px today. It is still
+   * measured rather than hardcoded: the two elements it adds up are the ones
+   * that would change it, and one of them is 3px of progress line whose height
+   * nobody should have to remember is baked into a number somewhere else.
+   */
   function chromeHeight() {
     return ['.loading-bar', '.header'].reduce((total, selector) => total + (document.querySelector(selector)?.offsetHeight ?? 0), 0)
   }

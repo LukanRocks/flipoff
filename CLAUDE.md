@@ -40,10 +40,10 @@ Both builds emit `dist/assets`, so they can share an origin only by not sharing 
 prefix. `admin/vite.config.ts` sets `base: '/admin/'`, and `app.ts` mounts the two builds
 at `/assets` and `/admin/assets`.
 
-The board cannot do the same. It is served at `/`, `/display.html` **and** `/{boardSlug}` —
-one path segment deep — so it needs `base: './'` for its asset URLs to land on `/assets`
-from every one of them. That is also why `routes/pages.ts` uses a `strict` router and
-redirects trailing slashes: `/{slug}/` would resolve `./assets` one level too deep.
+The board cannot do the same. It is served at `/` **and** at `/{boardSlug}` — one path
+segment deep — so it needs `base: './'` for its asset URLs to land on `/assets` from both.
+That is also why `routes/pages.ts` uses a `strict` router and redirects trailing slashes:
+`/{slug}/` would resolve `./assets` one level too deep.
 
 `noCacheStaticAssets` matches `/admin` by prefix rather than by listing paths, so
 client-side admin routes stay uncacheable without anyone having to remember to add them.
@@ -106,16 +106,34 @@ overflow and under-reports. Read a tile's own `getBoundingClientRect()` and mult
 
 Two consequences:
 
-- **Measure, do not assume, what the chrome costs.** `chromeHeight()` reads the live
-  `offsetHeight` of `.loading-bar` and `.header`. Both are absent on `display.html` and
-  `display: none` in fullscreen, and reading them back is what makes one function correct
-  in all three cases instead of three hardcoded constants.
+- **Measure, do not assume, what the chrome costs.** `chromeHeight()` adds up the live
+  `offsetHeight` of `.loading-bar` and `.header` and publishes it as `--chrome-height`,
+  which is where the top accent squares get their offset. It is a constant 63px today,
+  because the navbar hides by fading and keeps its space — measuring it anyway means the
+  3px progress line's height is not separately baked into a CSS rule.
 - **`fitBoard` reads `board`, it does not close over it.** The boot board is replaced when
   the real config arrives, and a captured reference would go on styling the discarded one.
 
 The nav icons are lucide paths pasted into `index.html` by hand, for the same reason
 `board/` has no other runtime dependency. `.is-off` on `.icon-btn` picks which of a
 button's icons shows; do not go back to selecting SVG children by position.
+
+## There is one board page, and it hides its own chrome
+
+`display.html` used to be a second entry point: the same board with no header, for
+pointing a TV at. It is gone, with no redirect left behind. `.header` is `opacity: 0`
+until hovered or focused, so `/` is already chrome-free whenever nobody is reaching for
+the controls, and fullscreen is just that page bigger.
+
+Two things this constrains:
+
+- **The navbar fades, it does not `display: none`.** It keeps its 60px of layout in every
+  mode, which is what stops the board's centring and the accent squares from jumping as it
+  appears. It is also still hit-testable while invisible — that is what lets a pointer
+  find it.
+- **Nothing may hide the header in fullscreen again.** Hover is the only way back to the
+  controls short of Escape, and a wall display in fullscreen is now the primary way this
+  runs, not a special case.
 
 ## config.json is backend-only
 

@@ -35,7 +35,17 @@ body {
   transform-origin: left;
 }
 
-/* Navbar */
+/*
+ * Navbar. Out of the way until you go looking for it: transparent at rest, and
+ * revealed by putting the pointer anywhere in the band it occupies. This is
+ * what replaced the standalone display.html — every page is chrome-free while
+ * nobody is reaching for the controls, so there is no longer a separate URL
+ * that is chrome-free by construction.
+ *
+ * It keeps its 60px of layout rather than floating over the board, so the
+ * board's centring and the accent squares below it do not shift as it fades.
+ * Opacity leaves it hit-testable, which is what makes hovering find it.
+ */
 .header {
   display: flex;
   align-items: center;
@@ -43,6 +53,16 @@ body {
   padding: 14px 28px;
   height: 60px;
   flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+/* :focus-within keeps it up for tab navigation, which never fires :hover. */
+.header:hover,
+.header:focus-within,
+/* An open shortcuts panel outlives the hover that opened it. */
+.header:has(.shortcuts-overlay.visible) {
+  opacity: 1;
 }
 
 .header-logo {
@@ -201,11 +221,8 @@ body {
 }
 
 /*
- * Fullscreen. The page is already dark and edge-to-edge, so this only has to
- * take the chrome away. `fitBoard()` in main.js resizes the tiles to the space
- * that frees up.
+ * Fullscreen has no chrome rules of its own any more: the navbar hides itself
+ * everywhere, and it stays reachable by hover in fullscreen too rather than
+ * leaving Escape as the only way back. All that is left is the board's tighter
+ * padding, which lives in board.css.
  */
-.fullscreen-active .header,
-.fullscreen-active .loading-bar {
-  display: none;
-}

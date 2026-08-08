@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from 'express'
 
-const NO_CACHE_PATHS = new Set(['/', '/index.html', '/display.html', '/screenshot.png', '/favicon.ico'])
+const NO_CACHE_PATHS = new Set(['/', '/index.html', '/screenshot.png', '/favicon.ico'])
 
 /**
  * Keeps the HTML shells and board pages uncacheable so a redeployed bundle

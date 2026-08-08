@@ -52,10 +52,10 @@
 }
 
 /*
- * The top pair clears the navbar rather than sitting behind it.
- * `--chrome-height` is measured by `fitBoard()` in main.js, so this is right
- * without hardcoding the header's height, and collapses to a true screen corner
- * where there is no navbar to clear — in fullscreen and on display.html.
+ * The top pair clears the navbar's band rather than sitting behind it — in
+ * fullscreen too, since the navbar only fades and keeps its space, so the two
+ * never move relative to each other. `--chrome-height` is measured by
+ * `fitBoard()` in main.js, so this needs no hardcoded header height.
  */
 .accent-square-top-left,
 .accent-square-top-right {

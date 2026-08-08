@@ -5,8 +5,6 @@ import { defineConfig } from 'vite'
 const BACKEND = 'http://localhost:8080'
 const ADMIN_DEV_SERVER = 'http://localhost:5174'
 
-const page = (name: string) => fileURLToPath(new URL(`./${name}.html`, import.meta.url))
-
 /**
  * The presentation half of /api/config, read from the same config.json the
  * server reads and inlined at build time.
@@ -59,13 +57,9 @@ export default defineConfig({
     __BOOT_PRESENTATION__: JSON.stringify(bootPresentation()),
   },
   build: {
+    // One entry now that display.html is gone, which is Vite's default -- no
+    // rollupOptions.input needed.
     assetsDir: 'assets',
-    rollupOptions: {
-      input: {
-        index: page('index'),
-        display: page('display'),
-      },
-    },
   },
   server: {
     port: 5173,

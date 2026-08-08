@@ -16,7 +16,7 @@
  */
 export function resolveBoardSlugFromPath() {
   const path = window.location.pathname.replace(/\/+$/, '') || '/'
-  if (path === '/' || path === '/index.html' || path === '/display.html') return null
+  if (path === '/' || path === '/index.html') return null
   const [, candidate] = path.split('/')
   return candidate || null
 }

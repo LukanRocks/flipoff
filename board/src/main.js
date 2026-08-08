@@ -19,6 +19,9 @@ import { connectingLines, failureLines, reconnectingLines } from './statusScreen
  */
 const OFFLINE_GRACE_MS = 20_000
 
+/** Floor for a computed tile, so a tiny window cannot produce a zero-size grid. */
+const MIN_TILE_SIZE = 8
+
 // Module scripts are deferred — the DOM is already parsed when this runs.
 void bootstrap()
 
@@ -29,6 +32,7 @@ async function bootstrap() {
   // Built before the server has been asked anything, so the wait and any
   // failures happen on the board rather than only in the console.
   let board = new Board(boardContainer, null, BOOT_PRESENTATION)
+  fitBoard()
   board.displayMessage(connectingLines())
 
   const displayConfig = await fetchConfig((failure) => board.displayMessage(failureLines(failure)))
@@ -39,6 +43,9 @@ async function bootstrap() {
   if (!samePresentation(BOOT_PRESENTATION, displayConfig)) {
     boardContainer.replaceChildren()
     board = new Board(boardContainer, null, displayConfig)
+    // The rebuild may have a different grid, and it is a new element either
+    // way -- the inline sizing from the boot board went with the old one.
+    fitBoard()
   }
 
   const soundEngine = new SoundEngine()
@@ -79,11 +86,19 @@ async function bootstrap() {
 
   // PR #4: Sound mode UI sync
   const volumeBtn = document.getElementById('volume-btn')
+  // Used to live on Board, which meant Board reached into page chrome to keep a
+  // label current. It is the same event either way, so it belongs here.
+  const shortcutSoundMode = document.querySelector('.shortcut-sound-mode')
   const syncSoundUi = () => {
-    if (!volumeBtn || !soundEngine.getSoundState) return
+    if (!soundEngine.getSoundState) return
     const state = soundEngine.getSoundState()
-    volumeBtn.classList.toggle('muted', state.muted)
-    volumeBtn.title = `Sound mode: ${state.label}`
+    if (volumeBtn) {
+      // `is-off` swaps volume-2 for volume-x; the label rides in the tooltip,
+      // which is the only place it is readable now that the button has no text.
+      volumeBtn.classList.toggle('is-off', state.muted)
+      volumeBtn.dataset.tooltip = `Sound: ${state.label}`
+    }
+    if (shortcutSoundMode) shortcutSoundMode.textContent = state.label
   }
   document.addEventListener('soundmodechange', syncSoundUi)
   syncSoundUi()
@@ -110,48 +125,97 @@ async function bootstrap() {
     })
   }
 
-  // PR #10: Fullscreen tile resizing
-  document.addEventListener('fullscreenchange', () => {
-    const isFs = !!document.fullscreenElement
-    document.body.classList.toggle('fullscreen-active', isFs)
-
-    if (isFs) {
-      setTimeout(() => {
-        const padH = 72
-        const padV = 60
-        const gap = 5
-        const maxW = (window.innerWidth - padH - (board.cols - 1) * gap) / board.cols
-        const maxH = (window.innerHeight - padV - (board.rows - 1) * gap) / board.rows
-        const size = Math.floor(Math.min(maxW, maxH))
-        board.boardEl.style.setProperty('--tile-size', `${size}px`)
-        board.boardEl.style.setProperty('--tile-gap', `${gap}px`)
-      }, 100)
-    } else {
-      board.boardEl.style.removeProperty('--tile-size')
-      board.boardEl.style.removeProperty('--tile-gap')
+  // Keyboard shortcuts panel. It used to be a circle badge on the board itself
+  // labelled 'N' -- a key nothing ever handled -- so moving it to the nav takes
+  // a false affordance with it.
+  const shortcutsBtn = document.getElementById('shortcuts-btn')
+  const shortcutsOverlay = document.getElementById('shortcuts-overlay')
+  if (shortcutsBtn && shortcutsOverlay) {
+    const setShortcutsOpen = (open) => {
+      shortcutsOverlay.classList.toggle('visible', open)
+      shortcutsBtn.setAttribute('aria-expanded', String(open))
     }
+
+    shortcutsBtn.addEventListener('click', (event) => {
+      // Without this the document listener below sees the same click and
+      // closes the panel in the same tick it was opened.
+      event.stopPropagation()
+      setShortcutsOpen(!shortcutsOverlay.classList.contains('visible'))
+    })
+
+    document.addEventListener('click', (event) => {
+      if (!shortcutsOverlay.contains(event.target)) setShortcutsOpen(false)
+    })
+
+    // Not KeyboardController's job: it ignores keys while a button has focus,
+    // which is exactly the state you are in right after opening this.
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') setShortcutsOpen(false)
+    })
+  }
+
+  // Entering or leaving fullscreen changes both the chrome and the viewport.
+  document.addEventListener('fullscreenchange', () => {
+    document.body.classList.toggle('fullscreen-active', !!document.fullscreenElement)
+    // Reading offsetHeight below flushes the class change first, so the header
+    // and loading line already measure 0 by the time fitBoard() sees them.
+    fitBoard()
   })
 
-  // Countdown progress bar — only runs rAF when a countdown is active
-  const countdownFill = document.getElementById('countdown-fill')
-  if (countdownFill) {
-    let countdownRaf = null
-    const updateCountdown = () => {
-      const progress = rotator.getCountdownProgress()
-      if (progress !== null) {
-        countdownFill.style.width = `${(progress * 100).toFixed(1)}%`
-        countdownRaf = requestAnimationFrame(updateCountdown)
-      } else {
-        countdownFill.style.width = '0%'
-        countdownRaf = null
-      }
+  // One frame per burst — a drag across the window fires resize continuously.
+  let resizeRaf = null
+  window.addEventListener('resize', () => {
+    if (resizeRaf !== null) return
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = null
+      fitBoard()
+    })
+  })
+
+  /*
+   * Loading line, as alternating sweeps: one screen draws the colour in, the
+   * next takes it away again. Nothing is ever rewound, which is what made the
+   * old bar snap -- it ran 0 to 100% and then had to get back to 0.
+   *
+   * Both halves travel left to right. Filling grows from the left edge;
+   * emptying retreats towards the right edge, so the boundary keeps moving the
+   * same way instead of draining backwards.
+   */
+  const loadingFill = document.getElementById('countdown-fill')
+  if (loadingFill) {
+    let filling = true
+    let counting = false
+
+    const paint = (progress) => {
+      // The two sweeps meet at a completely full or completely empty bar, so
+      // swapping the origin between them is invisible.
+      loadingFill.style.transformOrigin = filling ? 'left' : 'right'
+      loadingFill.style.transform = `scaleX(${filling ? progress : 1 - progress})`
     }
-    // Poll every second to detect when countdown starts, then switch to rAF
-    setInterval(() => {
-      if (countdownRaf === null && rotator.getCountdownProgress() !== null) {
-        countdownRaf = requestAnimationFrame(updateCountdown)
+
+    const tick = () => {
+      const progress = rotator.getCountdownProgress()
+
+      if (progress !== null) {
+        counting = true
+        paint(progress)
+      } else if (counting) {
+        // The rotator clears its countdown while the board flips to the next
+        // screen. Land exactly on full or empty rather than wherever the last
+        // frame fell, hold that through the flip, and hand the next screen the
+        // opposite sweep.
+        counting = false
+        paint(1)
+        filling = !filling
       }
-    }, 1000)
+
+      requestAnimationFrame(tick)
+    }
+
+    // Every frame, not only while a countdown is live. The gap between screens
+    // is the whole flip animation, and the 1s poll this replaces meant a sweep
+    // could begin up to a second late and jump to catch up.
+    requestAnimationFrame(tick)
   }
 
   // PR #2: Remote message sync
@@ -165,6 +229,60 @@ async function bootstrap() {
   }
 
   remoteSync.connect()
+
+  /**
+   * Scale the tiles to whatever space is left over.
+   *
+   * The grid is server-configurable, so no CSS clamp can be right for every
+   * `cols`: at 28 columns a 1440px window asked for ~1810px of tiles, and
+   * `.board`'s `overflow: hidden` quietly ate the outer columns at both edges.
+   * Measuring instead means any grid the server sends fits, windowed or
+   * fullscreen — one code path where there used to be a CSS guess plus a
+   * fullscreen-only correction.
+   *
+   * Reads `board` rather than closing over it: the boot board is replaced once
+   * the real config arrives.
+   */
+  function fitBoard() {
+    const boardEl = board.boardEl
+    const style = getComputedStyle(boardEl)
+    const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+    const padY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+
+    // Integer rather than the old `clamp(3px, 0.3vw, 5px)`: a fractional gap
+    // multiplied across 27 columns is enough to overflow by a tile.
+    const gap = window.innerWidth <= 600 ? 2 : window.innerWidth <= 900 ? 3 : 5
+
+    // Runs before the first paint, and again whenever the chrome can have
+    // changed.
+    const chrome = publishChromeHeights()
+
+    const availableWidth = window.innerWidth - padX - (board.cols - 1) * gap
+    const availableHeight = window.innerHeight - chrome - padY - (board.rows - 1) * gap
+    const size = Math.max(MIN_TILE_SIZE, Math.floor(Math.min(availableWidth / board.cols, availableHeight / board.rows)))
+
+    boardEl.style.setProperty('--tile-size', `${size}px`)
+    boardEl.style.setProperty('--tile-gap', `${gap}px`)
+  }
+
+  /**
+   * Measures the two bands above the board and publishes them for CSS, then
+   * returns their total for the tile fit.
+   *
+   * Separately, not as one total, because the two are used differently: the
+   * board is centred below both (the navbar only fades, so it always occupies
+   * its height), while the top accent squares tuck up under the loading line
+   * alone until the navbar appears. Measured rather than hardcoded so the 3px
+   * progress line's height is not a number someone has to remember is written
+   * down in two places.
+   */
+  function publishChromeHeights() {
+    const barHeight = document.querySelector('.loading-bar')?.offsetHeight ?? 0
+    const navHeight = document.querySelector('.header')?.offsetHeight ?? 0
+    document.documentElement.style.setProperty('--bar-height', `${barHeight}px`)
+    document.documentElement.style.setProperty('--nav-height', `${navHeight}px`)
+    return barHeight + navHeight
+  }
 
   function handleConnectionStatus(status) {
     const indicator = document.getElementById('config-indicator')

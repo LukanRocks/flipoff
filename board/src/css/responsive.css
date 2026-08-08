@@ -1,61 +1,38 @@
+/*
+ * Tile sizing is not here. The grid is server-configurable, so no breakpoint
+ * can name a --tile-size that is right for every `cols` — `fitBoard()` in
+ * main.js measures the space left over instead. What is left here is the
+ * chrome around it: how much padding the board keeps at each width, and what
+ * gets dropped when there is no room for it.
+ */
+
 /* Large screens / 4K TVs */
 @media (min-width: 2000px) {
   .board {
-    --tile-size: 65px;
-    --tile-gap: 5px;
-    padding: 36px 36px 48px;
-  }
-
-  .page-frame {
-    max-width: 1600px;
-  }
-}
-
-/* Standard desktop */
-@media (max-width: 1200px) {
-  .board {
-    --tile-size: clamp(32px, 4vw, 50px);
-  }
-
-  .page-frame {
-    margin: 16px;
+    padding: 36px;
   }
 }
 
 /* Tablet */
 @media (max-width: 900px) {
   .board {
-    --tile-size: clamp(26px, 4.5vw, 40px);
-    padding: 20px 16px 32px;
-    border-radius: 12px;
-  }
-
-  .page-frame {
-    margin: 12px;
-    border-radius: 12px;
+    padding: 20px 16px;
   }
 
   .header {
     padding: 14px 20px;
   }
 
-  .accent-segment {
-    width: 12px;
-    height: 12px;
+  .accent-square {
+    --accent-size: 12px;
+    --accent-inset: 12px;
   }
 }
 
 /* Mobile */
 @media (max-width: 600px) {
   .board {
-    --tile-size: clamp(18px, 4vw, 28px);
-    --tile-gap: 2px;
-    padding: 12px 8px 24px;
-  }
-
-  .page-frame {
-    margin: 8px;
-    border-radius: 10px;
+    padding: 12px 8px;
   }
 
   .header {
@@ -66,44 +43,20 @@
     font-size: 16px;
   }
 
-  .header-nav a {
-    font-size: 12px;
+  .icon-btn {
+    width: 30px;
+    height: 30px;
   }
 
-  .accent-bar {
+  /* They were hidden here when they sat inside the board's tiny mobile padding.
+     At the screen's corners there is room for them. */
+  .accent-square {
+    --accent-size: 10px;
+    --accent-inset: 10px;
+  }
+
+  /* Nothing to press these on, so the panel listing them is just clutter. */
+  #shortcuts-btn {
     display: none;
   }
-
-  .keyboard-hint {
-    display: none;
-  }
-}
-
-/* Fullscreen mode */
-:fullscreen .page-frame {
-  max-width: none;
-  margin: 0;
-  border-radius: 0;
-  min-height: 100vh;
-  box-shadow: none;
-  background: #111;
-}
-
-:fullscreen .header,
-:fullscreen .countdown-bar {
-  display: none !important;
-}
-
-:fullscreen .board-section {
-  height: 100vh;
-  width: 100vw;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-:fullscreen .board {
-  border-radius: 0;
-  box-shadow: none;
-  --tile-size: clamp(44px, 4vw, 70px);
 }

@@ -1,14 +1,22 @@
-/* Board Container */
+/*
+ * Board Container
+ *
+ * The tile variables here are only a first paint: `fitBoard()` in main.js
+ * overwrites both inline from the live grid. Sized to its own grid rather than
+ * to the page so `.board-section` can genuinely centre it, and painted the same
+ * colour as the page so the panel disappears and only the tiles read. Padding
+ * is symmetric: the extra bottom padding used to make room for the keyboard
+ * hint and a decorative indicator bar, both of which are gone.
+ */
 .board {
   --tile-size: clamp(36px, 4.2vw, 62px);
   --tile-gap: clamp(3px, 0.3vw, 5px);
 
   position: relative;
   background: #1a1a1a;
-  border-radius: 16px;
-  padding: 28px 48px 40px;
-  width: 100%;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+  padding: 28px 48px;
+  width: fit-content;
+  max-width: 100%;
   overflow: hidden;
 }
 
@@ -21,111 +29,61 @@
   justify-content: center;
 }
 
-/* Accent Squares — small stacked blocks in top corners */
-.accent-bar {
-  position: absolute;
-  top: 30px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+/*
+ * Accent Squares — one in each corner of the screen.
+ *
+ * `fixed`, not `absolute`: they belong to the viewport, not to the board, and
+ * that is also what carries them past `.board`'s `overflow: hidden`. They stay
+ * children of `.board` only so a rebuild disposes them, which works because
+ * `.board` sets no `transform`, `filter`, `perspective` or `contain` — any one
+ * of those would make it their containing block and snap all four back inside
+ * the panel.
+ */
+.accent-square {
+  --accent-size: 14px;
+  --accent-inset: 14px;
+
+  position: fixed;
+  width: var(--accent-size);
+  height: var(--accent-size);
+  border-radius: 2px;
+  /* `top` matches the navbar's own fade, so the pair move as one gesture. */
+  transition:
+    background-color 0.5s ease,
+    top 0.25s ease;
   z-index: 5;
 }
 
-.accent-bar-left {
-  left: 18px;
+/*
+ * The top pair tucks up under the loading line while the navbar is hidden, and
+ * drops to clear the navbar as it appears — `--nav-shown` is 0 or 1, so that
+ * term is the navbar's height or nothing at all. Both heights are measured by
+ * `fitBoard()` in main.js rather than hardcoded here.
+ */
+.accent-square-top-left,
+.accent-square-top-right {
+  top: calc(var(--bar-height, 0px) + var(--nav-shown, 0) * var(--nav-height, 0px) + var(--accent-inset));
 }
 
-.accent-bar-right {
-  right: 18px;
+.accent-square-top-left {
+  left: var(--accent-inset);
 }
 
-.accent-segment {
-  width: 14px;
-  height: 14px;
-  border-radius: 2px;
-  transition: background-color 0.5s ease;
+.accent-square-top-right {
+  right: var(--accent-inset);
 }
 
-/* Keyboard Shortcut Indicator */
-.keyboard-hint {
-  position: absolute;
-  bottom: 12px;
-  left: 16px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.35);
-  cursor: pointer;
-  transition: background 0.2s;
+.accent-square-bottom-left {
+  bottom: var(--accent-inset);
+  left: var(--accent-inset);
 }
 
-.keyboard-hint:hover {
-  background: rgba(255, 255, 255, 0.15);
+.accent-square-bottom-right {
+  bottom: var(--accent-inset);
+  right: var(--accent-inset);
 }
 
-/* Shortcuts Overlay */
-.shortcuts-overlay {
-  display: none;
-  position: absolute;
-  bottom: 48px;
-  left: 16px;
-  background: rgba(0, 0, 0, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 12px 16px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-  z-index: 10;
-  min-width: 196px;
-}
-
-.shortcuts-overlay.visible {
-  display: block;
-}
-
-.shortcuts-overlay div {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  padding: 4px 0;
-}
-
-.shortcuts-overlay kbd {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-family: inherit;
-  font-size: 11px;
-}
-
-.shortcut-sound-mode {
-  color: rgba(255, 255, 255, 0.92);
-  font-weight: 700;
-}
-
-/* Fullscreen: fill the screen edge-to-edge */
+/* Fullscreen: less padding, so more of the screen goes to tiles */
 .fullscreen-active .board {
-  border-radius: 0;
-  box-shadow: none;
-  padding: 24px 36px 36px;
-}
-
-/* Scroll indicator at bottom of board */
-.board::after {
-  content: '';
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 40px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.15);
+  padding: 24px 36px;
 }

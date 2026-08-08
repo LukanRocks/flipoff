@@ -39,7 +39,6 @@ export function createPagesRouter(state: AppState): Router {
 
   router.get('/', (_request, response) => sendPage(response, BOARD_ROOT, 'index.html'))
   router.get('/index.html', (_request, response) => sendPage(response, BOARD_ROOT, 'index.html'))
-  router.get('/display.html', (_request, response) => sendPage(response, BOARD_ROOT, 'display.html'))
 
   // The admin is a separate package, so its own index.html -- same filename as
   // the board's, different root.

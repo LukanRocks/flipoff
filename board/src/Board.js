@@ -2,6 +2,13 @@ import { Tile } from './Tile.js'
 
 const DISPLAY_MODES = ['color', 'matrix', 'grayscale']
 
+/**
+ * One accent square per corner of the screen. They used to be two stacks of two
+ * pinned to the board's top corners -- same four squares, spread to the corners
+ * of the viewport instead.
+ */
+const ACCENT_CORNERS = ['top-left', 'top-right', 'bottom-left', 'bottom-right']
+
 // PR #1: Display mode accent palettes. Only 'color' is server-configurable —
 // matrix and grayscale are fixed looks, not board settings.
 const FIXED_ACCENTS = {
@@ -37,10 +44,6 @@ export class Board {
     this.boardEl.style.setProperty('--grid-cols', this.cols)
     this.boardEl.style.setProperty('--grid-rows', this.rows)
 
-    // Left accent squares
-    this.leftBar = this._createAccentBar('accent-bar-left')
-    this.boardEl.appendChild(this.leftBar)
-
     // Tile grid
     this.gridEl = document.createElement('div')
     this.gridEl.className = 'tile-grid'
@@ -69,52 +72,17 @@ export class Board {
 
     this.boardEl.appendChild(this.gridEl)
 
-    // Right accent squares
-    this.rightBar = this._createAccentBar('accent-bar-right')
-    this.boardEl.appendChild(this.rightBar)
-
-    // Keyboard hint icon (bottom-left)
-    const hint = document.createElement('div')
-    hint.className = 'keyboard-hint'
-    hint.textContent = 'N'
-    hint.title = 'Keyboard shortcuts'
-    hint.addEventListener('click', (e) => {
-      e.stopPropagation()
-      const overlay = this.boardEl.querySelector('.shortcuts-overlay')
-      if (overlay) overlay.classList.toggle('visible')
+    // Kept as children of the board even though they render at the screen's
+    // corners, so a rebuild disposes them along with everything else.
+    this.accentSquares = ACCENT_CORNERS.map((corner) => {
+      const square = document.createElement('div')
+      square.className = `accent-square accent-square-${corner}`
+      this.boardEl.appendChild(square)
+      return square
     })
-    this.boardEl.appendChild(hint)
-
-    // Shortcuts overlay
-    const overlay = document.createElement('div')
-    overlay.className = 'shortcuts-overlay'
-    overlay.innerHTML = `
-      <div><span>Next message</span><kbd>Enter</kbd></div>
-      <div><span>Previous</span><kbd>\u2190</kbd></div>
-      <div><span>Fullscreen</span><kbd>F</kbd></div>
-      <div><span>Sound: <strong class="shortcut-sound-mode">Authentic</strong></span><kbd>M</kbd></div>
-      <div><span>Random</span><kbd>R</kbd></div>
-      <div><span>Color mode</span><kbd>C</kbd></div>
-    `
-    this.boardEl.appendChild(overlay)
-
-    this.shortcutSoundModeEl = overlay.querySelector('.shortcut-sound-mode')
-    this._syncSoundShortcutLabel()
-    document.addEventListener('soundmodechange', () => this._syncSoundShortcutLabel())
 
     containerEl.appendChild(this.boardEl)
     this._updateAccentColors()
-  }
-
-  _createAccentBar(extraClass) {
-    const bar = document.createElement('div')
-    bar.className = `accent-bar ${extraClass}`
-    for (let i = 0; i < 2; i++) {
-      const seg = document.createElement('div')
-      seg.className = 'accent-segment'
-      bar.appendChild(seg)
-    }
-    return bar
   }
 
   // PR #1: Display mode cycling
@@ -131,22 +99,14 @@ export class Board {
   /** Lets the silent boot board adopt the real engine without being rebuilt. */
   setSoundEngine(soundEngine) {
     this.soundEngine = soundEngine
-    this._syncSoundShortcutLabel()
   }
 
   _updateAccentColors() {
     const palette = this.accentsByMode[this.displayMode]
     const color = palette[this.accentIndex % palette.length]
-    const segments = this.boardEl.querySelectorAll('.accent-segment')
-    segments.forEach((seg) => {
-      seg.style.backgroundColor = color
-    })
-  }
-
-  _syncSoundShortcutLabel() {
-    if (!this.shortcutSoundModeEl || !this.soundEngine || !this.soundEngine.getSoundState) return
-    const state = this.soundEngine.getSoundState()
-    this.shortcutSoundModeEl.textContent = state.label
+    for (const square of this.accentSquares) {
+      square.style.backgroundColor = color
+    }
   }
 
   // PR #2: interrupt support

@@ -21,8 +21,10 @@ No accounts. No subscriptions. No $199 fee. Build it once and go.
 - Connection indicator, and automatic reconnection: a display survives a server restart without anyone touching it
 - Multi-board support — run multiple independent displays from one server
 - Display modes: Color, Matrix, Grayscale accent palettes
-- Countdown progress bar showing time until next message (hidden in fullscreen)
-- Fullscreen TV mode with automatic tile resizing
+- Loading line across the top of the screen showing time until the next message
+- Tiles sized to the viewport, so any grid the server is configured with fits at any width
+- Navbar hides itself until you hover it, so the board is chrome-free at rest
+- Fullscreen TV mode
 - Keyboard controls for manual navigation
 - Emoji support in messages (animate through random charset characters before landing)
 - Responsive from mobile to 4K displays
@@ -59,7 +61,6 @@ http://localhost:5173 behaves like the deployed app.
 | `http://localhost:8080`              | Display                                            |
 | `http://localhost:8080/admin`        | Admin dashboard (network-wide, password-protected) |
 | `http://localhost:8080/admin/screens` | Straight to a dashboard page — every admin page has its own URL |
-| `http://localhost:8080/display.html` | Standalone fullscreen display (no header/hero)     |
 | `http://localhost:8080/<board-slug>` | A secondary board                                  |
 
 The admin password is auto-generated on first run and printed to the console. Set it
@@ -132,13 +133,12 @@ flipoff/
   docker-compose.yml      — Docker Compose with persistent volume
   PLUGINS.md              — Plugin development guide
   board/
-    index.html            — Main display page
-    display.html          — Standalone fullscreen display (no chrome)
-    vite.config.ts        — Build config: 2 entry pages, dev proxy to the backend
+    index.html            — The display page
+    vite.config.ts        — Build config: relative base, dev proxy to the backend
     public/
       images/             — Screenshot and other static images
     src/
-      main.js             — Entry point, audio init, fullscreen, remote sync
+      main.js             — Entry point, audio init, tile fitting, fullscreen, remote sync
       Board.js            — Tile grid, display modes, transitions
       Tile.js             — Split-flap flip with character stepping and emoji support
       SoundEngine.js      — Sound profiles, tick extraction, stereo panning
@@ -151,10 +151,10 @@ flipoff/
       audio/              — Joke mode: rubber duck squeak, fart finisher
       css/
         reset.css         — CSS reset
-        layout.css        — Page layout, nav buttons, countdown bar, fullscreen
+        layout.css        — Page layout, nav icon buttons, tooltips, loading bar, fullscreen
         board.css         — Board container, accent bars, shortcuts overlay
         tile.css          — Split-flap tile halves and flip animations
-        responsive.css    — Media queries (mobile through 4K)
+        responsive.css    — Media queries for the chrome (tile sizing is main.js's job)
   admin/                  — React + TypeScript dashboard
     index.html            — App shell
     vite.config.ts        — Build config: base '/admin/', dev proxy to the backend

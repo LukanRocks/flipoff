@@ -1,24 +1,75 @@
-/* Page Frame — mock browser window */
-.page-frame {
-  max-width: 1280px;
-  margin: 24px auto;
-  background: #f5f5f5;
-  border-radius: 16px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
-  overflow: hidden;
-  min-height: calc(100vh - 48px);
+/*
+ * The page is one flat dark field, the same #1a1a1a the board panel uses, so
+ * the panel dissolves into it and only the tiles read as an object. Set here
+ * rather than in reset.css: admin.css already re-declares body over its own
+ * copy of the reset, and keeping the two reset.css files identical is the
+ * point of duplicating them.
+ */
+body {
+  background: #1a1a1a;
+  color: #f5f5f5;
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
 }
 
-/* Header */
+/* Loading line — flush to the top edge, no margin, no radius */
+.loading-bar {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/*
+ * Full width and scaled, rather than a growing `width`. main.js repaints this
+ * every frame, so the old `transition: width 0.3s linear` only lagged behind —
+ * and animating the reset back to zero is what made the rewind between screens
+ * visible in the first place. A transform also stays off the layout path.
+ */
+.loading-fill {
+  height: 100%;
+  width: 100%;
+  background: #00ff7f;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+/*
+ * Navbar. Out of the way until you go looking for it: transparent at rest, and
+ * revealed by putting the pointer anywhere in the band it occupies. This is
+ * what replaced the standalone display.html — every page is chrome-free while
+ * nobody is reaching for the controls, so there is no longer a separate URL
+ * that is chrome-free by construction.
+ *
+ * It keeps its 60px of layout rather than floating over the board, so the
+ * board's centring and the accent squares below it do not shift as it fades.
+ * Opacity leaves it hit-testable, which is what makes hovering find it.
+ */
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 36px;
+  padding: 14px 28px;
   height: 60px;
   flex-shrink: 0;
+  opacity: var(--nav-shown, 0);
+  transition: opacity 0.25s ease;
+}
+
+/*
+ * The single definition of "the navbar is showing", because two things read it:
+ * the navbar's own opacity above, and how far down the top accent squares sit
+ * (board.css). Deriving both from one 0-or-1 flip is what keeps them in step —
+ * the squares ride down as the navbar fades in, rather than being pinned below
+ * a bar that is not there.
+ *
+ * :focus-within covers tab navigation, which never fires :hover. The third
+ * condition keeps it up while the shortcuts panel is open, since that outlives
+ * the hover that opened it.
+ */
+body:has(.header:hover, .header:focus-within, .shortcuts-overlay.visible) {
+  --nav-shown: 1;
 }
 
 .header-logo {
@@ -35,7 +86,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ccc;
+  background: #555;
   flex-shrink: 0;
   transition:
     background 0.3s,
@@ -53,110 +104,132 @@
 }
 
 .header-nav {
+  position: relative; /* anchors the shortcuts panel to the end of the row */
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: 6px;
 }
 
-.header-nav a {
-  font-size: 14px;
-  font-weight: 500;
-  color: #666;
-  transition: color 0.2s;
-}
-
-.header-nav a:hover {
-  color: #000;
-}
-
-.volume-icon {
-  display: flex;
+/* One class for all three nav controls — link, fullscreen and sound */
+.icon-btn {
+  position: relative;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
   background: none;
-  color: #666;
-  padding: 4px;
-  transition: color 0.2s;
+  color: rgba(255, 255, 255, 0.55);
+  transition:
+    color 0.2s,
+    background 0.2s;
 }
 
-.volume-icon:hover {
-  color: #000;
+.icon-btn:hover,
+.icon-btn:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.volume-icon.muted svg path:last-child,
-.volume-icon.muted svg path:nth-child(2) {
+/* Which of a button's icons is showing. The sound button ships both. */
+.icon-btn .icon-off {
   display: none;
 }
 
-/* Nav action buttons */
-.header-btn,
-.fullscreen-btn {
-  padding: 7px 14px;
-  background: #000;
-  color: #fff !important;
-  font-size: 13px;
+.icon-btn.is-off .icon-on {
+  display: none;
+}
+
+.icon-btn.is-off .icon-off {
+  display: block;
+}
+
+/*
+ * Tooltip. Anchored right rather than centred so the last button's bubble
+ * cannot run off the edge of the viewport.
+ */
+.icon-btn::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  padding: 5px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.88);
+  color: #fff;
+  font-size: 12px;
   font-weight: 600;
-  border-radius: 7px;
-  transition: background 0.2s;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  z-index: 20;
 }
 
-.header-btn:hover,
-.fullscreen-btn:hover {
-  background: #333 !important;
-  color: #fff !important;
+.icon-btn:hover::after,
+.icon-btn:focus-visible::after {
+  opacity: 1;
 }
 
-.fullscreen-btn {
-  display: inline-flex;
+/* The open panel already says what the button does; the bubble would sit on it. */
+.icon-btn[aria-expanded='true']::after {
+  opacity: 0;
+}
+
+/* Shortcuts panel — drops from the end of the nav row */
+.shortcuts-overlay {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 196px;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.92);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  z-index: 30;
+}
+
+.shortcuts-overlay.visible {
+  display: block;
+}
+
+.shortcuts-overlay div {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-family: inherit;
+  gap: 16px;
+  padding: 4px 0;
 }
 
-/* Board Section */
+.shortcuts-overlay kbd {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.shortcut-sound-mode {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 700;
+}
+
+/* Board — centred on both axes in whatever height the navbar leaves */
 .board-section {
   flex: 1;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 0 24px 32px;
-}
-
-/* Countdown progress bar */
-.countdown-bar {
-  height: 3px;
-  background: rgba(0, 0, 0, 0.06);
-  margin: 0 24px 24px;
-  border-radius: 2px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.countdown-fill {
-  height: 100%;
-  width: 0%;
-  background: #00ff7f;
-  border-radius: 2px;
-  transition: width 0.3s linear;
-}
-
-/* Fullscreen: hide header and countdown, board fills viewport */
-.fullscreen-active .header,
-.fullscreen-active .countdown-bar {
-  display: none;
-}
-
-.fullscreen-active .page-frame {
-  max-width: 100%;
-  margin: 0;
-  border-radius: 0;
-  background: #111;
-  min-height: 100vh;
-}
-
-.fullscreen-active .board-section {
-  padding: 0;
-  height: 100vh;
   align-items: center;
+  justify-content: center;
+  min-height: 0;
 }
+
+/*
+ * Fullscreen has no chrome rules of its own any more: the navbar hides itself
+ * everywhere, and it stays reachable by hover in fullscreen too rather than
+ * leaving Escape as the only way back. All that is left is the board's tighter
+ * padding, which lives in board.css.
+ */

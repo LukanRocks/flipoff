@@ -2,10 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "web",
+      "name": "board",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["-C", "web", "dev"],
+      "runtimeArgs": ["-C", "board", "dev"],
       "port": 5173
+    },
+    {
+      "name": "admin",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "admin", "dev"],
+      "port": 5174
     },
     {
       "name": "backend",

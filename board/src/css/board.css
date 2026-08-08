@@ -47,19 +47,22 @@
   width: var(--accent-size);
   height: var(--accent-size);
   border-radius: 2px;
-  transition: background-color 0.5s ease;
+  /* `top` matches the navbar's own fade, so the pair move as one gesture. */
+  transition:
+    background-color 0.5s ease,
+    top 0.25s ease;
   z-index: 5;
 }
 
 /*
- * The top pair clears the navbar's band rather than sitting behind it — in
- * fullscreen too, since the navbar only fades and keeps its space, so the two
- * never move relative to each other. `--chrome-height` is measured by
- * `fitBoard()` in main.js, so this needs no hardcoded header height.
+ * The top pair tucks up under the loading line while the navbar is hidden, and
+ * drops to clear the navbar as it appears — `--nav-shown` is 0 or 1, so that
+ * term is the navbar's height or nothing at all. Both heights are measured by
+ * `fitBoard()` in main.js rather than hardcoded here.
  */
 .accent-square-top-left,
 .accent-square-top-right {
-  top: calc(var(--chrome-height, 0px) + var(--accent-inset));
+  top: calc(var(--bar-height, 0px) + var(--nav-shown, 0) * var(--nav-height, 0px) + var(--accent-inset));
 }
 
 .accent-square-top-left {

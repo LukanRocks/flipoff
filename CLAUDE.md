@@ -106,11 +106,11 @@ overflow and under-reports. Read a tile's own `getBoundingClientRect()` and mult
 
 Two consequences:
 
-- **Measure, do not assume, what the chrome costs.** `chromeHeight()` adds up the live
-  `offsetHeight` of `.loading-bar` and `.header` and publishes it as `--chrome-height`,
-  which is where the top accent squares get their offset. It is a constant 63px today,
-  because the navbar hides by fading and keeps its space — measuring it anyway means the
-  3px progress line's height is not separately baked into a CSS rule.
+- **Measure, do not assume, what the chrome costs.** `publishChromeHeights()` reads the
+  live `offsetHeight` of `.loading-bar` and `.header` and publishes them as `--bar-height`
+  and `--nav-height`. Two variables rather than one total, because they are consumed
+  differently — see the navbar section below — and measured rather than hardcoded so the
+  3px progress line's height is not written down in two places.
 - **`fitBoard` reads `board`, it does not close over it.** The boot board is replaced when
   the real config arrives, and a captured reference would go on styling the discarded one.
 
@@ -128,9 +128,15 @@ the controls, and fullscreen is just that page bigger.
 Two things this constrains:
 
 - **The navbar fades, it does not `display: none`.** It keeps its 60px of layout in every
-  mode, which is what stops the board's centring and the accent squares from jumping as it
-  appears. It is also still hit-testable while invisible — that is what lets a pointer
-  find it.
+  mode, which is what stops the board's centring from jumping as it appears. It is also
+  still hit-testable while invisible — that is what lets a pointer find it.
+- **`--nav-shown` is the one definition of "the navbar is showing".** One rule
+  (`body:has(.header:hover, .header:focus-within, .shortcuts-overlay.visible)`) sets it to
+  1, and two things read it: the navbar's `opacity`, and the `top` of the two upper accent
+  squares, which sit under the loading line alone while it is hidden and ride down to
+  clear the navbar as it appears. Both transition at 0.25s so they move as one gesture.
+  Add a fourth way to reveal the navbar and it belongs in that selector, not in a second
+  rule — the squares would otherwise stay put while the navbar faded in over them.
 - **Nothing may hide the header in fullscreen again.** Hover is the only way back to the
   controls short of Escape, and a wall display in fullscreen is now the primary way this
   runs, not a special case.

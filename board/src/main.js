@@ -253,11 +253,9 @@ async function bootstrap() {
     // multiplied across 27 columns is enough to overflow by a tile.
     const gap = window.innerWidth <= 600 ? 2 : window.innerWidth <= 900 ? 3 : 5
 
-    // Published for CSS: the top accent squares sit below the navbar, and this
-    // is the only place its height is measured. Runs before the first paint,
-    // and again whenever the chrome can have changed.
-    const chrome = chromeHeight()
-    document.documentElement.style.setProperty('--chrome-height', `${chrome}px`)
+    // Runs before the first paint, and again whenever the chrome can have
+    // changed.
+    const chrome = publishChromeHeights()
 
     const availableWidth = window.innerWidth - padX - (board.cols - 1) * gap
     const availableHeight = window.innerHeight - chrome - padY - (board.rows - 1) * gap
@@ -268,13 +266,22 @@ async function bootstrap() {
   }
 
   /**
-   * The navbar only fades, so this is a constant 63px today. It is still
-   * measured rather than hardcoded: the two elements it adds up are the ones
-   * that would change it, and one of them is 3px of progress line whose height
-   * nobody should have to remember is baked into a number somewhere else.
+   * Measures the two bands above the board and publishes them for CSS, then
+   * returns their total for the tile fit.
+   *
+   * Separately, not as one total, because the two are used differently: the
+   * board is centred below both (the navbar only fades, so it always occupies
+   * its height), while the top accent squares tuck up under the loading line
+   * alone until the navbar appears. Measured rather than hardcoded so the 3px
+   * progress line's height is not a number someone has to remember is written
+   * down in two places.
    */
-  function chromeHeight() {
-    return ['.loading-bar', '.header'].reduce((total, selector) => total + (document.querySelector(selector)?.offsetHeight ?? 0), 0)
+  function publishChromeHeights() {
+    const barHeight = document.querySelector('.loading-bar')?.offsetHeight ?? 0
+    const navHeight = document.querySelector('.header')?.offsetHeight ?? 0
+    document.documentElement.style.setProperty('--bar-height', `${barHeight}px`)
+    document.documentElement.style.setProperty('--nav-height', `${navHeight}px`)
+    return barHeight + navHeight
   }
 
   function handleConnectionStatus(status) {
